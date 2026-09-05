@@ -192,8 +192,12 @@ networking, no real audio or input devices.
   the machine through the emulator's own keybind table, whose source numbering is the
   core's button indices; sound is summed from every playing stream into one frame's worth
   at the end of the frame.
-- **M8 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
-  upstream's own differential harness.
+- **M8 - dynarmic. MEASURED AND REJECTED 2026-09-05.** The recompiler works and is
+  correct - it is upstream's own oracle for the interpreter, and 5,508 whole programs
+  agree - but it makes the emulated machine SLOWER, so it is not offered as a setting.
+  See "What the recompiler costs" below. What the milestone leaves behind is the
+  interpreter-agreement leg, which is worth more: it says the processor this core
+  actually runs on is right.
 
 ## What the sandbox needed (M2, 2026-09-05)
 
@@ -440,3 +444,31 @@ now has a picture to run it by.
   first is simpler and matches ruffle; the second is truer to what the machine draws.
 - Whether the guest needs ffmpeg at all for the first playable games, or whether the
   MMF path can stay stubbed until something asks for it.
+
+## What the recompiler costs (M8, 2026-09-05)
+
+dynarmic builds for both flavors and runs the game. It is about 2.2x faster in
+wall-clock per instruction, and it is deterministic - two runs give the same
+digest. It is also correct: upstream's `dyncom_difftest` uses it as the oracle
+for the interpreter and 5,508 randomized whole programs agree, with zero
+interpreter fallbacks.
+
+And it halves the game's frame rate. Over the same 25 seconds of emulated time,
+Red Faction presents **508 frames on the interpreter and 282 on the recompiler**.
+The instruction counts say why: 431k instructions per game frame on dyncom,
+553k on dynarmic - 28% more work charged for the same frame. A block recompiler
+finishes the block it is in rather than the quantum it was given, and every one
+of those overshot instructions is charged to a clock that buys time at 484 MIPS.
+Pay 28% more for a frame and it lands the wrong side of the vsync the game sleeps
+on, so the game waits for the next one: half rate, exactly.
+
+That is not a trade worth offering. The interpreter already runs this machine at
+about twenty times real time (1,500 emulated frames in 1.2 seconds), so nothing
+is waiting on the processor, and a setting that makes the emulated game run at
+half speed while the host works less is a trap rather than an option. It would
+also split the core in two: a movie recorded on one backend would not replay on
+the other, since the two machines schedule differently.
+
+`run-native --cpu dynarmic` keeps the recompiler reachable for measurement. The
+core does not declare it as a setting, and `waterbox/build-difftest.sh` builds
+the harness that now gates the interpreter.

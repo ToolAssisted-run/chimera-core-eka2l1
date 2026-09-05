@@ -122,6 +122,8 @@ int main(int argc, char **argv) {
             install_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--rom-only") == 0) && has_value) {
             rom_only_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--cpu") == 0) && has_value) {
+            options.cpu_backend = argv[++i];
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
             gpu = true;
         } else if ((std::strcmp(argv[i], "--screen-out") == 0) && has_value) {

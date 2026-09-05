@@ -41,6 +41,27 @@ else
 	echo "FAIL upstream"; echo "$out"; fail=$((fail + 1))
 fi
 
+# ---- the processor this core runs on is right ------------------------------
+# Upstream's own differential harness: 200,000 single instructions against a
+# golden ALU model, and thousands of whole programs against dynarmic as an
+# independent oracle. It lives in its own build tree because building it changes
+# the cpu target (a test-only VFP selector), and the machine this core ships
+# must not be built that way.
+dt="$root/build/difftest/eka2l1/src/emu/cpu/dyncom_difftest"
+
+if [ ! -x "$dt" ]; then
+	echo "SKIP cpu: dyncom_difftest not built (./waterbox/build-difftest.sh)"
+else
+	dt_out="$(timeout 900 "$dt" 2>&1 | tail -2)"
+
+	if echo "$dt_out" | grep -q "^dyncom_difftest: PASS"; then
+		echo "PASS cpu: $(echo "$dt_out" | grep coverage: | sed 's/^ *//')"
+		pass=$((pass + 1))
+	else
+		echo "FAIL cpu"; echo "$dt_out"; fail=$((fail + 1))
+	fi
+fi
+
 # ---- the machine says the same thing twice ---------------------------------
 a="$(run)"
 b="$(run)"

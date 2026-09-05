@@ -58,6 +58,10 @@ namespace chimera {
 
         // The rate the machine is asked to make sound at.
         std::uint32_t sample_rate = 44100;
+
+        // Which ARM implementation runs the machine. "dyncom" is the
+        // interpreter and the reference; "dynarmic" is the recompiler.
+        std::string cpu_backend = "dyncom";
     };
 
     // The emulator, its clock, and the loop that drives both. Everything a core

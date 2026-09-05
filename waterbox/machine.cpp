@@ -91,11 +91,12 @@ namespace chimera {
         conf_ = std::make_unique<eka2l1::config::state>();
         conf_->storage = options_.storage;
 
-        // The interpreter is the reference backend, the scheduler must return
+        // The processor the caller asked for (the interpreter by default, and
+        // it is the reference), the scheduler must return
         // rather than sleep when nothing is runnable (this loop owns the
         // waiting), and neither the bitmap compressor nor the app scan may run
         // on a thread of its own.
-        conf_->cpu_backend = "dyncom";
+        conf_->cpu_backend = options_.cpu_backend;
         conf_->cpu_load_save = false;
         conf_->fbs_enable_compression_queue = false;
         conf_->single_thread_app_scan = true;
