@@ -1,0 +1,24 @@
+{
+  "package": "eka2l1",
+  "effectiveTerms": "GPL-3.0-or-later",
+  "commercialUse": "allowed under the GPL",
+  "note": "The built core combines this repository's MIT integration with EKA2L1 and is distributed under the GPL-3.0-or-later. No Symbian ROM, device dump or game is included: those are the user's, supplied by the user, and never redistributed here.",
+  "components": [
+    {
+      "name": "chimera-core-eka2l1 (integration)",
+      "license": "MIT, and EKA2L1's terms for patches/",
+      "url": "https://github.com/ToolAssisted-run/chimera-core-eka2l1",
+      "commit": "{selfCommit}",
+      "file": "LICENSE",
+      "sourceUrl": "https://github.com/ToolAssisted-run/chimera-core-eka2l1/archive/{commit}.tar.gz"
+    },
+    {
+      "name": "EKA2L1",
+      "license": "GPL-3.0-or-later",
+      "url": "https://github.com/EKA2L1/EKA2L1",
+      "commit": "{submodule:extern/eka2l1}",
+      "file": "extern/eka2l1/LICENSE",
+      "sourceUrl": "https://github.com/EKA2L1/EKA2L1/archive/{commit}.tar.gz"
+    }
+  ]
+}

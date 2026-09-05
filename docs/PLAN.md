@@ -169,12 +169,20 @@ networking, no real audio or input devices.
 - **M4 (was) - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
-- **M5 - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
+- **M5 - input and audio. DONE 2026-09-05** (`waterbox/input.*`, `waterbox/audio.*`); a
+  game is still not loadable.
+- **M5 (was) - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
   a real game card booting to its title screen.
 - **M6 - savestates and rewind.** Arena snapshots, the rewind leg, the GPU-state rule
   the bridge already carries.
-- **M7 - the package.** `eka2l1.chimeraCore`, the firmware declaration for the device
-  dump, the bundle for what the device writes, default keybinds, the licence manifest.
+- **M7 - the package. DONE 2026-09-05.** `eka2l1.zip` builds and installs into a chimera
+  checkout: `waterbox.config` (a Symbian machine, a 176x208 screen at 60 Hz, 44100 Hz
+  stereo, a 21-key Series 60 keypad), `file_slots.json` (one slot - the DEVICE ROM, since
+  a project is a device until games load), `default_keybinds.json`, and the licence
+  manifest (GPL-3.0-or-later; no ROM, dump or game is ever included). The keypad reaches
+  the machine through the emulator's own keybind table, whose source numbering is the
+  core's button indices; sound is summed from every playing stream into one frame's worth
+  at the end of the frame.
 - **M8 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
   upstream's own differential harness.
 

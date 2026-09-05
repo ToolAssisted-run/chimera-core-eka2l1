@@ -1,11 +1,14 @@
 #include "machine.h"
+#include "audio.h"
 #include "gl-context.h"
+#include "input.h"
 #include "host-ui.h"
 
 #include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
 #include <drivers/graphics/graphics.h>
+#include <drivers/input/common.h>
 #include <drivers/itc.h>
 #include <kernel/kernel.h>
 #include <kernel/timing.h>
@@ -44,6 +47,37 @@ namespace chimera {
         conf_->cpu_load_save = false;
         conf_->fbs_enable_compression_queue = false;
         conf_->single_thread_app_scan = true;
+
+        // The keypad. The emulator's keybind table translates a source code -
+        // ours, since we are the one feeding it - into a Symbian scan code, so
+        // this table is the whole of the machine's input mapping.
+        static const std::uint32_t TARGETS[BUTTON_COUNT] = {
+            eka2l1::epoc::std_key_up_arrow,
+            eka2l1::epoc::std_key_down_arrow,
+            eka2l1::epoc::std_key_left_arrow,
+            eka2l1::epoc::std_key_right_arrow,
+            eka2l1::epoc::std_key_device_3,
+            eka2l1::epoc::std_key_device_0,
+            eka2l1::epoc::std_key_device_1,
+            eka2l1::epoc::std_key_application_0,
+            eka2l1::epoc::std_key_application_1,
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+            '*', '#'
+        };
+
+        conf_->keybinds.keybinds.clear();
+
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            eka2l1::config::keybind bind;
+
+            bind.source.type = eka2l1::config::KEYBIND_TYPE_KEY;
+            bind.source.data.keycode = static_cast<std::uint32_t>(i);
+            bind.target = TARGETS[i];
+
+            conf_->keybinds.keybinds.push_back(bind);
+        }
+
+        buttons_.assign(BUTTON_COUNT, false);
 
         settings_ = std::make_unique<eka2l1::config::app_settings>(conf_.get());
 
@@ -102,6 +136,50 @@ namespace chimera {
         gdriver_->set_display_hook([]() {});
 
         sys_->set_graphics_driver(gdriver_.get());
+    }
+
+    void machine::start_audio() {
+        adriver_ = std::make_shared<audio_sink>(options_.sample_rate);
+        sys_->set_audio_driver(adriver_.get());
+    }
+
+    void machine::render_audio(std::int16_t *out, const std::size_t frames) {
+        if (!adriver_) {
+            std::fill(out, out + frames * 2, static_cast<std::int16_t>(0));
+            return;
+        }
+
+        adriver_->render(out, frames);
+    }
+
+    void machine::set_button(const int index, const bool held) {
+        if ((index < 0) || (index >= BUTTON_COUNT) || (buttons_[index] == held)) {
+            return;
+        }
+
+        buttons_[index] = held;
+
+        eka2l1::kernel_system *kern = sys_->get_kernel_system();
+
+        if (!kern) {
+            return;
+        }
+
+        eka2l1::window_server *winserv = reinterpret_cast<eka2l1::window_server *>(
+            kern->get_by_name<eka2l1::service::server>(
+                eka2l1::get_winserv_name_by_epocver(sys_->get_symbian_version_use())));
+
+        if (!winserv) {
+            return;
+        }
+
+        eka2l1::drivers::input_event event;
+
+        event.type_ = eka2l1::drivers::input_event_type::key;
+        event.key_.state_ = held ? eka2l1::drivers::key_state::pressed : eka2l1::drivers::key_state::released;
+        event.key_.code_ = index;
+
+        winserv->queue_input_from_driver(event);
     }
 
     bool machine::read_screen(std::vector<std::uint32_t> &out, int &width, int &height) {

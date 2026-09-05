@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Default bindings for the keypad this package declares. The five-way pad on the arrows,",
+    "the soft keys where a phone puts them - under the screen, left and right - and the",
+    "numbers on the number row, which is where a player's fingers already are."
+  ],
+  "AllTrollers": {
+    "Symbian Keypad": {
+      "Up": "UpArrow",
+      "Down": "DownArrow",
+      "Left": "LeftArrow",
+      "Right": "RightArrow",
+      "Select": "Return",
+      "Left Soft": "F1",
+      "Right Soft": "F2",
+      "Call": "F3",
+      "End Call": "F4",
+      "0": "Number0",
+      "1": "Number1",
+      "2": "Number2",
+      "3": "Number3",
+      "4": "Number4",
+      "5": "Number5",
+      "6": "Number6",
+      "7": "Number7",
+      "8": "Number8",
+      "9": "Number9",
+      "Star": "Multiply",
+      "Hash": "Number3"
+    }
+  }
+}

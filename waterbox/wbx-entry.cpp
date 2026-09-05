@@ -5,6 +5,7 @@
 // machine's own memory (memfs.cpp). Without it the machine is still built and
 // still keeps time, which is what the equivalence gate compares when no ROM is
 // present.
+#include "input.h"
 #include "machine.h"
 #include "memfs.h"
 
@@ -21,8 +22,10 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <emulibc.h>
 #include <waterboxcore.h>
@@ -47,8 +50,22 @@ namespace {
     std::uint64_t g_timerLatenessUs = 0;
     int g_timerEvent = 0;
 
-    std::uint32_t g_video[SCREEN_WIDTH * SCREEN_HEIGHT];
-    std::int16_t g_audio[2] = { 0, 0 };
+    // The picture and the sound of one frame. The screen is the N-Gage's own
+    // 176x208; the buffer is the largest a Symbian screen this core will run
+    // can be, so a device with a bigger panel still fits.
+    constexpr int MAX_WIDTH = 640;
+    constexpr int MAX_HEIGHT = 640;
+
+    constexpr std::uint32_t SAMPLE_RATE = 44100;
+    constexpr int MAX_SAMPLES = 2048;
+
+    std::vector<std::uint32_t> g_screen;
+    std::uint32_t g_video[MAX_WIDTH * MAX_HEIGHT];
+    int g_videoWidth = SCREEN_WIDTH;
+    int g_videoHeight = SCREEN_HEIGHT;
+
+    std::int16_t g_audio[MAX_SAMPLES * 2];
+    int g_audioSamples = 0;
 
     std::shared_ptr<chimera::memory_file_system> g_drives;
     bool g_device = false;
@@ -71,9 +88,11 @@ ECL_EXPORT int Init(void) {
     options.storage = "data";
 
     options.in_memory_drives = true;
+    options.sample_rate = SAMPLE_RATE;
 
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();
+    g_machine->start_audio();
 
     // The drives, before the device: setting the device loads the ROM and asks
     // every filesystem about the product code, and ours has to be one of them.
@@ -131,6 +150,28 @@ ECL_EXPORT void FrameAdvance(std::uint64_t) {
     }
 
     g_machine->run_for_us(1000000ull / 60ull);
+
+    // The sound the machine made during it, and the picture it left behind.
+    g_audioSamples = static_cast<int>(SAMPLE_RATE / 60);
+    g_machine->render_audio(g_audio, static_cast<std::size_t>(g_audioSamples));
+
+    int width = 0;
+    int height = 0;
+
+    if (g_machine->read_screen(g_screen, width, height) && (width > 0) && (height > 0)
+        && (width <= MAX_WIDTH) && (height <= MAX_HEIGHT)) {
+        g_videoWidth = width;
+        g_videoHeight = height;
+
+        std::copy(g_screen.begin(), g_screen.end(), g_video);
+    }
+}
+
+// Levels, not events: the host says what is held this frame.
+ECL_EXPORT void SetButton(std::int32_t index, std::int32_t state) {
+    if (g_inited) {
+        g_machine->set_button(index, state != 0);
+    }
 }
 
 ECL_EXPORT std::uint32_t *GetVideoBgra(void) {
@@ -138,11 +179,11 @@ ECL_EXPORT std::uint32_t *GetVideoBgra(void) {
 }
 
 ECL_EXPORT int GetVideoWidth(void) {
-    return SCREEN_WIDTH;
+    return g_videoWidth;
 }
 
 ECL_EXPORT int GetVideoHeight(void) {
-    return SCREEN_HEIGHT;
+    return g_videoHeight;
 }
 
 ECL_EXPORT std::int16_t *GetAudio(void) {
@@ -150,6 +191,28 @@ ECL_EXPORT std::int16_t *GetAudio(void) {
 }
 
 ECL_EXPORT int GetAudioSampleCount(void) {
+    return g_audioSamples;
+}
+
+// The machine keeps its state in the sandbox's own memory, which the host
+// snapshots whole; nothing here is a domain of its own yet.
+ECL_EXPORT int GetMemoryDomainCount(void) {
+    return 0;
+}
+
+ECL_EXPORT const char *GetMemoryDomainName(std::int32_t) {
+    return "";
+}
+
+ECL_EXPORT std::uint8_t *GetMemoryDomainPtr(std::int32_t) {
+    return nullptr;
+}
+
+ECL_EXPORT std::int64_t GetMemoryDomainSize(std::int32_t) {
+    return 0;
+}
+
+ECL_EXPORT int GetMemoryDomainWritable(std::int32_t) {
     return 0;
 }
 

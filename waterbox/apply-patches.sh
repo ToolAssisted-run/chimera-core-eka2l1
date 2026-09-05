@@ -1,21 +1,26 @@
 #!/bin/sh
-# Applies the numbered patches to the extern/eka2l1 submodule. Idempotent:
-# a tree that already carries the changes is left alone; anything else is an
-# error worth seeing. The driver lives in waterbox/ and is built OUTSIDE the
-# eka2l1 tree, so nothing is copied in.
+# Applies the numbered patches to the extern/eka2l1 submodule.
+#
+# The series is applied to a PRISTINE tree, all of it or none: patches that
+# touch the same neighbourhood cannot be recognised one by one afterwards
+# (git apply --reverse --check on one of them fails once another has moved the
+# lines around it), and a half-applied tree is not a state worth modelling. So
+# a clean tree gets the series, and a dirty one is taken to have it already.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 eka="$root/extern/eka2l1"
 
+if ! git -C "$eka" diff --quiet; then
+	echo "patches: already applied ($(ls "$root"/patches/*.patch | wc -l) in the series)"
+	exit 0
+fi
+
 for p in "$root"/patches/*.patch; do
-	if git -C "$eka" apply --check "$p" 2>/dev/null; then
-		git -C "$eka" apply "$p"
-		echo "applied: $(basename "$p")"
-	elif git -C "$eka" apply --reverse --check "$p" 2>/dev/null; then
-		echo "already applied: $(basename "$p")"
-	else
-		echo "NEITHER applies nor reverses: $(basename "$p")" >&2
+	git -C "$eka" apply "$p" || {
+		echo "FAILED to apply $(basename "$p") - the tree is now half patched;" >&2
+		echo "run: git -C extern/eka2l1 reset --hard, then try again" >&2
 		exit 1
-	fi
+	}
+	echo "applied: $(basename "$p")"
 done

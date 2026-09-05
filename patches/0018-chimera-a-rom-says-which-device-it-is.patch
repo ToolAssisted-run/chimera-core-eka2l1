@@ -1,10 +1,10 @@
 diff --git a/src/emu/system/include/system/epoc.h b/src/emu/system/include/system/epoc.h
-index 427c7f1c7..e9f039b6c 100644
+index 427c7f1c7..f79aa303e 100644
 --- a/src/emu/system/include/system/epoc.h
 +++ b/src/emu/system/include/system/epoc.h
-@@ -159,6 +159,17 @@ namespace eka2l1 {
- 
-         void set_cpu_ticks_callback(cpu_ticks_callback_type callback);
+@@ -196,6 +196,17 @@ namespace eka2l1 {
+         ngage_game_card_install_error install_ngage_game_card(const std::string &card_path, std::function<void(std::string)> game_name_found_cb, progress_changed_callback progress_cb = nullptr);
+         bool get_ngage_game_info_mounted(apa_app_registry &result);
  
 +        /**
 +         * @brief Where the ROM image is, when it is not where the storage says.
@@ -17,9 +17,9 @@ index 427c7f1c7..e9f039b6c 100644
 +         */
 +        void set_rom_path(const std::string &path);
 +
-         void startup();
-         bool load(const std::u16string &path, const std::u16string &cmd_arg);
+         bool reset();
  
+         bool pause();
 diff --git a/src/emu/system/include/system/software.h b/src/emu/system/include/system/software.h
 index 7d0962369..88174d912 100644
 --- a/src/emu/system/include/system/software.h
@@ -55,27 +55,27 @@ index 7d0962369..88174d912 100644
  }
 \ No newline at end of file
 diff --git a/src/emu/system/src/epoc.cpp b/src/emu/system/src/epoc.cpp
-index 9d113fe3b..6bcaf00fd 100644
+index 9d113fe3b..d7c034c5c 100644
 --- a/src/emu/system/src/epoc.cpp
 +++ b/src/emu/system/src/epoc.cpp
-@@ -119,6 +119,7 @@ namespace eka2l1 {
-         std::mutex mut;
+@@ -124,6 +124,7 @@ namespace eka2l1 {
+         arm::exclusive_monitor_instance exmonitor;
  
-         cpu_ticks_callback_type cpu_ticks_callback_;
+         arm_emulator_type cpu_type;
 +        std::string rom_path_override_;
  
-         arm::core_instance cpu;
-         arm::exclusive_monitor_instance exmonitor;
-@@ -521,6 +522,10 @@ namespace eka2l1 {
-             cpu->stop();
+         drivers::graphics_driver *gdriver;
+         drivers::audio_driver *adriver;
+@@ -517,6 +518,10 @@ namespace eka2l1 {
+             return kern_->get_epoc_version();
          }
  
 +        void set_rom_path(const std::string &path) {
 +            rom_path_override_ = path;
 +        }
 +
-         void set_cpu_ticks_callback(cpu_ticks_callback_type callback) {
-             cpu_ticks_callback_ = std::move(callback);
+         void prepare_reschedule() {
+             cpu->stop();
          }
 @@ -1402,7 +1407,9 @@ namespace eka2l1 {
          cpu->clear_instruction_cache();
@@ -88,16 +88,16 @@ index 9d113fe3b..6bcaf00fd 100644
  
          if (!load_rom(rom_path)) {
              if (lock_sys) {
-@@ -1515,6 +1522,10 @@ namespace eka2l1 {
-         impl->set_cpu_ticks_callback(std::move(callback));
+@@ -1519,6 +1526,10 @@ namespace eka2l1 {
+         return impl->startup();
      }
  
 +    void system::set_rom_path(const std::string &path) {
 +        impl->set_rom_path(path);
 +    }
 +
-     void system::startup() {
-         return impl->startup();
+     bool system::load(const std::u16string &path, const std::u16string &cmd_arg) {
+         return impl->load(path, cmd_arg);
      }
 diff --git a/src/emu/system/src/software.cpp b/src/emu/system/src/software.cpp
 index 73344bc91..9d288e4ec 100644

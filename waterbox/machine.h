@@ -21,6 +21,8 @@ namespace eka2l1 {
 }
 
 namespace chimera {
+    class audio_sink;
+
     struct machine_options {
         // Where the device dump, the drives and the registries live.
         std::string storage;
@@ -48,6 +50,9 @@ namespace chimera {
         // Draw. The context is the embedder's (gl-context.h) and the driver is
         // driven from this loop rather than from a thread of its own.
         bool graphics = false;
+
+        // The rate the machine is asked to make sound at.
+        std::uint32_t sample_rate = 44100;
     };
 
     // The emulator, its clock, and the loop that drives both. Everything a core
@@ -88,6 +93,18 @@ namespace chimera {
             return gdriver_ != nullptr;
         }
 
+        // Gives the machine somewhere to put its sound. Call after startup().
+        void start_audio();
+
+        // A frame's worth of it, stereo, at the declared rate. Silence when
+        // the machine has made none.
+        void render_audio(std::int16_t *out, const std::size_t frames);
+
+        // A key of the machine's keypad, held or let go. Levels, not events:
+        // the caller says what is held this frame and the machine is told only
+        // about the changes.
+        void set_button(const int index, const bool held);
+
         // The screen as the window server last composited it. False when the
         // machine has no screen yet - before a device, or before the window
         // server has made one.
@@ -116,8 +133,12 @@ namespace chimera {
         std::unique_ptr<eka2l1::config::app_settings> settings_;
         std::unique_ptr<eka2l1::system> sys_;
         std::shared_ptr<eka2l1::drivers::graphics_driver> gdriver_;
+        std::shared_ptr<audio_sink> adriver_;
 
         // Instructions the emulator reported during the loop() call in flight.
         std::uint32_t slice_instructions_;
+
+        // What each key was doing last time, so only changes are sent.
+        std::vector<bool> buttons_;
     };
 }
