@@ -1,0 +1,63 @@
+diff --git a/src/emu/kernel/include/kernel/timing.h b/src/emu/kernel/include/kernel/timing.h
+index 056be0354..b5dabda1a 100644
+--- a/src/emu/kernel/include/kernel/timing.h
++++ b/src/emu/kernel/include/kernel/timing.h
+@@ -84,6 +84,8 @@ namespace eka2l1 {
+         common::high_resolution_timer_period_guard res_guard_;
+         realtime_level acc_level_;
+ 
++        bool driven_;
++
+     protected:
+         void loop();
+         void wipeout();
+@@ -94,6 +96,25 @@ namespace eka2l1 {
+ 
+         void reset();
+ 
++        /**
++         * @brief Let the owner drive the timer instead of a thread of its own.
++         *
++         * By default reset() starts a thread that sleeps on the host clock and
++         * calls advance() when an event comes due. An owner that already has a
++         * loop - and a clock of its own, installed through
++         * common::set_utc_time_source - takes that job over: no thread is
++         * started, and advance() is expected from the loop.
++         *
++         * Set it before reset(); it is not a way to stop a running thread.
++         */
++        void set_driven(const bool driven) {
++            driven_ = driven;
++        }
++
++        bool driven() const {
++            return driven_;
++        }
++
+         /**
+          * @brief Stop the timer thread and drop all pending events.
+          *
+diff --git a/src/emu/kernel/src/timing.cpp b/src/emu/kernel/src/timing.cpp
+index 28e70f9ae..287953101 100644
+--- a/src/emu/kernel/src/timing.cpp
++++ b/src/emu/kernel/src/timing.cpp
+@@ -37,6 +37,7 @@ namespace eka2l1 {
+         should_stop_ = false;
+         should_paused_ = false;
+         acc_level_ = realtime_level_low;
++        driven_ = false;
+ 
+         teletimer_ = common::make_teletimer(cpu_hz);
+         set_realtime_level(realtime_level_mid);
+@@ -83,6 +84,11 @@ namespace eka2l1 {
+         // start_ from the previous run.
+         teletimer_->start();
+ 
++        if (driven_) {
++            // The owner calls advance() from its own loop, on its own clock.
++            return;
++        }
++
+         timer_thread_ = std::make_unique<std::thread>([this]() {
+             loop();
+         });

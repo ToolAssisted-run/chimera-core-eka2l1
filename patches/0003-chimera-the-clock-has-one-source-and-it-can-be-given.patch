@@ -1,0 +1,70 @@
+diff --git a/src/emu/common/include/common/time.h b/src/emu/common/include/common/time.h
+index 25ee94fe1..68f3cc4bf 100644
+--- a/src/emu/common/include/common/time.h
++++ b/src/emu/common/include/common/time.h
+@@ -24,6 +24,7 @@
+ #pragma once
+ 
+ #include <cstdint>
++#include <functional>
+ #include <memory>
+ #include <string>
+ 
+@@ -38,6 +39,21 @@ namespace eka2l1::common {
+         return us * 1000;
+     }
+ 
++    /**
++     * @brief The source of "now", in microseconds since 1/1/1970.
++     *
++     * Everything time-like in the emulator arrives here in the end: the calendar
++     * reads below, and through them basic_teletimer_micro, which is what the
++     * nanokernel timer measures the machine with. An embedder whose machine must
++     * not depend on the host clock - a deterministic core, a replay, a test -
++     * installs its own source and the wall is never read again.
++     *
++     * Install before the machine starts. An empty source restores the wall.
++     */
++    using utc_time_source = std::function<std::uint64_t()>;
++
++    void set_utc_time_source(utc_time_source source);
++
+     /**
+      * @brief Get total seconds esclaped in microseconds since 1/1/1970.
+      * @returns A 64-bit number indicates the total microseconds.
+diff --git a/src/emu/common/src/time.cpp b/src/emu/common/src/time.cpp
+index e04700fcd..3fd2041de 100644
+--- a/src/emu/common/src/time.cpp
++++ b/src/emu/common/src/time.cpp
+@@ -42,16 +42,29 @@
+ #endif
+ 
+ namespace eka2l1::common {
++    static utc_time_source g_utc_time_source;
++
++    void set_utc_time_source(utc_time_source source) {
++        g_utc_time_source = std::move(source);
++    }
++
+     std::uint64_t get_current_utc_time_in_microseconds_since_epoch() {
++        if (g_utc_time_source) {
++            return g_utc_time_source();
++        }
++
+         return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+     }
+ 
+     std::uint64_t get_current_utc_time_in_microseconds_since_0ad() {
+-        return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
+-            + ad_epoc_dist_microsecs;
++        return get_current_utc_time_in_microseconds_since_epoch() + ad_epoc_dist_microsecs;
+     }
+ 
+     std::uint64_t get_current_utc_time_in_nanoseconds_since_epoch() {
++        if (g_utc_time_source) {
++            return us_to_ns(g_utc_time_source());
++        }
++
+         return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+     }
+ 

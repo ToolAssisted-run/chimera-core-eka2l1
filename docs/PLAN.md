@@ -21,20 +21,24 @@ networking, no real audio or input devices.
   address-space model (`src/emu/mem/`). The whole emulator has three `mmap` call sites
   and zero `SIGSEGV` handlers, so the sandbox needs to serve nothing but ordinary
   anonymous pages. This is the single biggest difference from PCSX2 and rpcs3.
-- **Time is the wall clock, and it has exactly two seams.**
-    + `common::teletimer` is a pure virtual interface behind one factory,
-      `common::make_teletimer` (`src/emu/common/include/common/time.h:86,101`), and only
-      `ntimer` ever holds one (`src/emu/kernel/src/timing.cpp:41`). Every emulated tick,
-      every kernel timer deadline and every `after`/`at` request reads it. Replace what
-      the factory returns and the machine's clock is ours.
-    + `common::get_current_utc_time_in_microseconds_since_{epoch,0ad}`
-      (`src/emu/common/src/time.cpp:45,49`) is the calendar clock: the kernel's base
-      time, window-server event timestamps, package install timestamps, DRM and
-      centralrepo. Nine call sites, one seam, a fixed epoch plus virtual offset.
+- **Time is the wall clock, and it has exactly one seam.** The survey expected two -
+  `common::make_teletimer` for the emulated tick source, and the calendar reads for the
+  RTC - but the only teletimer implementation, `basic_teletimer_micro`, measures with
+  `get_current_utc_time_in_microseconds_since_epoch` itself. So the kernel's own tick
+  source, every timer deadline, the kernel's base time, window-server event timestamps,
+  package install timestamps, DRM and centralrepo all reduce to one function
+  (`src/emu/common/src/time.cpp:45`). Give that function a source and the machine's
+  clock is the machine's (M1, patch 0003).
 - **`ntimer` owns a host thread** (`src/emu/kernel/src/timing.cpp:86`) that sleeps on
   real microseconds and fires kernel timer events. It already exposes `advance()`
-  returning the microseconds until the next event, so the loop can pump it; the thread
-  is what has to go.
+  returning the microseconds until the next event (the comment says nanoseconds and is
+  wrong), so the loop can pump it; the thread is what has to go (M1, patch 0004).
+  `reset()` is also what starts the timer's measurement - a timer that never had it
+  reads the same instant forever and nothing it holds ever comes due.
+- **An empty machine cannot be stepped.** Without a device there is no memory model, and
+  `thread_scheduler::switch_context` dereferences it while switching to the thread that
+  cannot exist (`src/emu/kernel/src/scheduler.cpp:89`). Time still passes for such a
+  machine and its timers still come due, which is what M1 tests with.
 - **The scheduler blocks when nothing is runnable** (`src/emu/kernel/src/scheduler.cpp:131`),
   but only behind `kernel_system::should_core_idle_when_inactive()`, which is the
   `cpu_load_save` config flag (`src/emu/kernel/src/kernel.cpp:1462`). Turned off, the
@@ -112,16 +116,21 @@ networking, no real audio or input devices.
 
 ## Milestones
 
-- **M0 - the native reference builds and runs headless.** Patch 0001 makes the desktop
+- **M0 - the native reference builds and runs headless. DONE 2026-09-05.** Patch 0001 makes the desktop
   frontend optional; `build-native.sh` configures upstream with the option set above and
   builds the emulator libraries plus `ekatests`. Proof: `ekatests` green, and a
   `run-native` harness that constructs `system`, starts it with no device installed and
   tears it down cleanly, twice, with byte-identical output.
-- **M1 - virtual time.** The teletimer seam, the calendar seam, `ntimer` pumped from the
-  loop, the timer thread gone, `cpu_load_save` off, the FBS and applist threads made
-  synchronous. Proof: two native runs of the same workload agree instruction for
-  instruction, and the run takes the same number of instructions under `nice -20` and
-  under load.
+- **M1 - virtual time. DONE 2026-09-05.** One clock seam (0003), the timer driven by its
+  owner rather than a thread (0004), the owner told how much CPU ran so it can pay for it
+  in time (0005), and the app scan able to run on the calling thread (0006, ordering
+  follows the pool otherwise). `cpu_load_save` off and the FBS compressor left disabled,
+  both config flags. The glue is `waterbox/vclock.*` (the clock) and `waterbox/machine.*`
+  (the machine and its step loop: run the emulator, pump the timer, and buy idle time
+  outright by jumping to the next deadline). Proven by a kernel timer every millisecond
+  over a second of emulated time: 999 firings, none of them late, identical with the
+  host stalled 5 ms every frame - and the same machine left on the host clock does
+  notice that stall, which is what says the check has teeth. One host thread.
 - **M2 - core.wbx.** The guest toolchain build, the syscall gaps closed, the emulator
   boots a device inside the sandbox with no graphics driver. Proof: native == sandbox on
   a memory digest over N frames.

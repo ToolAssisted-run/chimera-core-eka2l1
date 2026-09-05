@@ -1,0 +1,80 @@
+diff --git a/src/emu/system/include/system/epoc.h b/src/emu/system/include/system/epoc.h
+index f45a7016a..427c7f1c7 100644
+--- a/src/emu/system/include/system/epoc.h
++++ b/src/emu/system/include/system/epoc.h
+@@ -91,6 +91,17 @@ namespace eka2l1 {
+     using hal_instance = std::unique_ptr<epoc::hal>;
+     using system_reset_callback_type = std::function<void(system *)>;
+ 
++    /**
++     * @brief Told how many instructions the last loop() gave the machine.
++     *
++     * The emulator has no cycle model: loop() runs the current thread for its
++     * remaining quantum and moves on. An owner that pays for those instructions
++     * in time of its own - a core whose clock is virtual - needs to know how
++     * many there were, and this is where it is told. Called once per loop() in
++     * which a thread actually ran, never with zero.
++     */
++    using cpu_ticks_callback_type = std::function<void(const std::uint32_t instructions)>;
++
+     enum zip_mount_error {
+         zip_mount_error_none,
+         zip_mount_error_not_zip,
+@@ -146,6 +157,8 @@ namespace eka2l1 {
+ 
+         void prepare_reschedule();
+ 
++        void set_cpu_ticks_callback(cpu_ticks_callback_type callback);
++
+         void startup();
+         bool load(const std::u16string &path, const std::u16string &cmd_arg);
+ 
+diff --git a/src/emu/system/src/epoc.cpp b/src/emu/system/src/epoc.cpp
+index 3f3b13c64..9d113fe3b 100644
+--- a/src/emu/system/src/epoc.cpp
++++ b/src/emu/system/src/epoc.cpp
+@@ -118,6 +118,8 @@ namespace eka2l1 {
+     class system_impl {
+         std::mutex mut;
+ 
++        cpu_ticks_callback_type cpu_ticks_callback_;
++
+         arm::core_instance cpu;
+         arm::exclusive_monitor_instance exmonitor;
+ 
+@@ -519,6 +521,10 @@ namespace eka2l1 {
+             cpu->stop();
+         }
+ 
++        void set_cpu_ticks_callback(cpu_ticks_callback_type callback) {
++            cpu_ticks_callback_ = std::move(callback);
++        }
++
+         const language get_system_language() const {
+             return kern_->get_current_language();
+         }
+@@ -785,7 +791,12 @@ namespace eka2l1 {
+ #endif
+             }
+ 
+-            to_run->add_ticks(cpu->get_num_instruction_executed());
++            const std::uint32_t instructions = cpu->get_num_instruction_executed();
++            to_run->add_ticks(instructions);
++
++            if (cpu_ticks_callback_ && instructions) {
++                cpu_ticks_callback_(instructions);
++            }
+         }
+ 
+         if (!kern_->should_terminate()) {
+@@ -1500,6 +1511,10 @@ namespace eka2l1 {
+         return impl->prepare_reschedule();
+     }
+ 
++    void system::set_cpu_ticks_callback(cpu_ticks_callback_type callback) {
++        impl->set_cpu_ticks_callback(std::move(callback));
++    }
++
+     void system::startup() {
+         return impl->startup();
+     }
