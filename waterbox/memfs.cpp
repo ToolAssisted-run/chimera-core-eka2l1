@@ -12,9 +12,6 @@
 
 namespace chimera {
     namespace {
-        constexpr char PACK_MAGIC[12] = { 'C', 'H', 'I', 'M', 'E', 'R', 'A', 'D', 'E', 'V', 'P', 'K' };
-        constexpr std::uint32_t PACK_VERSION = 1;
-
         std::string lowered(const std::string &s) {
             std::string out = s;
             for (char &c : out) {
@@ -96,11 +93,6 @@ namespace chimera {
             }
 
             return path;
-        }
-
-        template <typename T>
-        bool read_pod(std::FILE *f, T &out) {
-            return std::fread(&out, sizeof(T), 1, f) == 1;
         }
 
         std::size_t count_entries(const memory_node &node) {
@@ -477,53 +469,6 @@ namespace chimera {
 
         mappings_[index].second = true;
         roots_[index].is_dir = true;
-
-        return true;
-    }
-
-    bool memory_file_system::read_device_info(const std::string &name) {
-        std::FILE *f = std::fopen(name.c_str(), "rb");
-
-        if (!f) {
-            return false;
-        }
-
-        char magic[sizeof(PACK_MAGIC)];
-        std::uint32_t version = 0;
-        std::uint32_t entries = 0;
-
-        if ((std::fread(magic, 1, sizeof(magic), f) != sizeof(magic))
-            || (std::memcmp(magic, PACK_MAGIC, sizeof(magic)) != 0)
-            || !read_pod(f, version) || (version != PACK_VERSION) || !read_pod(f, entries)) {
-            std::fclose(f);
-            return false;
-        }
-
-        std::uint32_t epocver = 0;
-        std::uint32_t machine_uid = 0;
-
-        auto read_string = [f](std::string &out) {
-            std::uint32_t length = 0;
-
-            if (!read_pod(f, length)) {
-                return false;
-            }
-
-            out.resize(length);
-            return length ? (std::fread(out.data(), 1, length, f) == length) : true;
-        };
-
-        const bool ok = read_pod(f, epocver) && read_pod(f, machine_uid) && read_string(firmcode_)
-            && read_string(model_) && read_string(manufacturer_);
-
-        std::fclose(f);
-
-        if (!ok) {
-            return false;
-        }
-
-        epocver_ = epocver;
-        machine_uid_ = machine_uid;
 
         return true;
     }

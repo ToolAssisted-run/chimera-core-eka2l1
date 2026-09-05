@@ -1,0 +1,382 @@
+diff --git a/src/emu/system/include/system/epoc.h b/src/emu/system/include/system/epoc.h
+index 427c7f1c7..e9f039b6c 100644
+--- a/src/emu/system/include/system/epoc.h
++++ b/src/emu/system/include/system/epoc.h
+@@ -159,6 +159,17 @@ namespace eka2l1 {
+ 
+         void set_cpu_ticks_callback(cpu_ticks_callback_type callback);
+ 
++        /**
++         * @brief Where the ROM image is, when it is not where the storage says.
++         *
++         * Setting a device loads its ROM from
++         * <storage>/roms/<firmware code>/SYM.ROM, which assumes the emulator
++         * laid the storage out itself. An embedder handed one file - and told
++         * which device it is by the file - has it somewhere else entirely.
++         * An empty path restores the derived one.
++         */
++        void set_rom_path(const std::string &path);
++
+         void startup();
+         bool load(const std::u16string &path, const std::u16string &cmd_arg);
+ 
+diff --git a/src/emu/system/include/system/software.h b/src/emu/system/include/system/software.h
+index 7d0962369..88174d912 100644
+--- a/src/emu/system/include/system/software.h
++++ b/src/emu/system/include/system/software.h
+@@ -20,9 +20,28 @@
+ #pragma once
+ 
+ #include <common/types.h>
++#include <loader/rom.h>
+ #include <string>
+ 
+ namespace eka2l1::loader {
+     epocver determine_rpkg_symbian_version(const std::string &extracted_path);
+     bool determine_rpkg_product_info(const std::string &extracted_path, std::string &manufacturer, std::string &firmcode, std::string &model);
++
++    /**
++     * @brief Work out which device a ROM is, from the ROM.
++     *
++     * The two above read an unpacked copy of the ROM's files. A ROM carries
++     * those same files, and something that has the image but no unpacked copy
++     * - an installer that has not run yet, an embedder handed one file - can
++     * ask it directly. The files consulted and the order of preference are the
++     * same, so the answer is the same.
++     *
++     * @param romf   A ROM already parsed by load_rom.
++     * @param stream The image it was parsed from, still open.
++     *
++     * @returns False when the ROM says nothing this recognises; the outputs are
++     *          then untouched.
++     */
++    bool determine_device_from_rom(loader::rom &romf, common::ro_stream *stream, std::string &manufacturer,
++        std::string &firmcode, std::string &model, epocver &ver);
+ }
+\ No newline at end of file
+diff --git a/src/emu/system/src/epoc.cpp b/src/emu/system/src/epoc.cpp
+index 9d113fe3b..6bcaf00fd 100644
+--- a/src/emu/system/src/epoc.cpp
++++ b/src/emu/system/src/epoc.cpp
+@@ -119,6 +119,7 @@ namespace eka2l1 {
+         std::mutex mut;
+ 
+         cpu_ticks_callback_type cpu_ticks_callback_;
++        std::string rom_path_override_;
+ 
+         arm::core_instance cpu;
+         arm::exclusive_monitor_instance exmonitor;
+@@ -521,6 +522,10 @@ namespace eka2l1 {
+             cpu->stop();
+         }
+ 
++        void set_rom_path(const std::string &path) {
++            rom_path_override_ = path;
++        }
++
+         void set_cpu_ticks_callback(cpu_ticks_callback_type callback) {
+             cpu_ticks_callback_ = std::move(callback);
+         }
+@@ -1402,7 +1407,9 @@ namespace eka2l1 {
+         cpu->clear_instruction_cache();
+ 
+         // Load ROM
+-        const std::string rom_path = add_path(conf_->storage, add_path(preset::ROM_FOLDER_PATH, add_path(common::lowercase_string(dvc->firmware_code), preset::ROM_FILENAME)));
++        const std::string rom_path = rom_path_override_.empty()
++            ? add_path(conf_->storage, add_path(preset::ROM_FOLDER_PATH, add_path(common::lowercase_string(dvc->firmware_code), preset::ROM_FILENAME)))
++            : rom_path_override_;
+ 
+         if (!load_rom(rom_path)) {
+             if (lock_sys) {
+@@ -1515,6 +1522,10 @@ namespace eka2l1 {
+         impl->set_cpu_ticks_callback(std::move(callback));
+     }
+ 
++    void system::set_rom_path(const std::string &path) {
++        impl->set_rom_path(path);
++    }
++
+     void system::startup() {
+         return impl->startup();
+     }
+diff --git a/src/emu/system/src/software.cpp b/src/emu/system/src/software.cpp
+index 73344bc91..9d288e4ec 100644
+--- a/src/emu/system/src/software.cpp
++++ b/src/emu/system/src/software.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include <system/software.h>
+ 
++#include <common/buffer.h>
+ #include <common/dynamicfile.h>
+ #include <common/fileutils.h>
+ #include <common/ini.h>
+@@ -29,6 +30,47 @@
+ #include <optional>
+ 
+ namespace eka2l1::loader {
++    // What a platform.txt version pair means. Shared by the two readers of it:
++    // the one that reads an unpacked copy, and the one that reads the ROM.
++    static std::optional<epocver> get_epocver_through_platform_version(const int major, const int minor) {
++        switch (major) {
++        case 5:
++            // TODO: Separation
++            return epocver::epocu6;
++
++        case 6:
++            return epocver::epoc6;
++
++        case 9:
++            switch (minor) {
++            case 1:
++                return epocver::epoc91;
++
++            case 3:
++                // Note: This should be detected through SIS!
++                return epocver::epoc93fp2;
++
++            case 4:
++                return epocver::epoc94;
++
++            default:
++                break;
++            }
++
++            break;
++
++        case 100:
++        case 101:
++            return epocver::epoc10;
++
++        default:
++            LOG_WARN(SYSTEM, "Unsupport Symbian version {}.{}, will default to 9.4", major, minor);
++            break;
++        }
++
++        return std::nullopt;
++    }
++
+     static bool determine_rpkg_symbian_version_through_platform_file(const std::string &extracted_path, epocver &ver) {
+         const std::string platform_ini_path = add_path(extracted_path, "resource\\versions\\platform.txt");
+         common::ini_file platform_ini;
+@@ -49,50 +91,8 @@ namespace eka2l1::loader {
+             major = major_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
+             minor = minor_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
+ 
+-            switch (major) {
+-            case 5: {
+-                // TODO: Separation
+-                ver = epocver::epocu6;
+-                break;
+-            }
+-
+-            case 6: {
+-                ver = epocver::epoc6;
+-                break;
+-            }
+-
+-            case 9: {
+-                switch (minor) {
+-                case 1: {
+-                    ver = epocver::epoc91;
+-                    break;
+-                }
+-
+-                case 3: {
+-                    // Note: This should be detected through SIS!
+-                    ver = epocver::epoc93fp2;
+-                    break;
+-                }
+-
+-                case 4: {
+-                    ver = epocver::epoc94;
+-                    break;
+-                }
+-                }
+-
+-                break;
+-            }
+-
+-            case 100:
+-            case 101: {
+-                ver = epocver::epoc10;
+-                break;
+-            }
+-
+-            default: {
+-                LOG_WARN(SYSTEM, "Unsupport Symbian version {}, will default to 9.4", major, minor);
+-                break;
+-            }
++            if (std::optional<epocver> mapped = get_epocver_through_platform_version(major, minor)) {
++                ver = mapped.value();
+             }
+         } else {
+             LOG_ERROR(SYSTEM, "Symbian platform.txt found, but one of two needed nodes weren't present");
+@@ -346,4 +346,166 @@ namespace eka2l1::loader {
+ 
+         return true;
+     }
++
++    // The bytes of one file in the ROM, read straight out of the image.
++    static bool read_rom_file(loader::rom &romf, common::ro_stream *stream, const std::string &path,
++        std::string &out) {
++        std::optional<loader::rom_entry> entry = romf.burn_tree_find_entry(path);
++
++        if (!entry || entry->dir) {
++            return false;
++        }
++
++        out.resize(entry->size);
++
++        if (out.empty()) {
++            return true;
++        }
++
++        // Where the entry lives in the image: the ROM is mapped at a base
++        // address, and an entry names where it would be once mapped.
++        stream->seek(entry->address_lin - romf.header.rom_base, common::seek_where::beg);
++
++        return stream->read(out.data(), out.size()) == out.size();
++    }
++
++    static bool determine_symbian_version_from_rom(loader::rom &romf, common::ro_stream *stream, epocver &ver) {
++        std::string platform_txt;
++
++        if (read_rom_file(romf, stream, "Z:\\resource\\versions\\platform.txt", platform_txt)) {
++            common::ini_file platform_ini;
++
++            if (platform_ini.load_from_memory(platform_txt) == 0) {
++                auto major_node = platform_ini.find("SymbianOSMajorVersion");
++                auto minor_node = platform_ini.find("SymbianOSMinorVersion");
++
++                if (major_node && minor_node) {
++                    const int major = major_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
++                    const int minor = minor_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
++
++                    const std::optional<epocver> discovered = get_epocver_through_platform_version(major, minor);
++
++                    if (discovered) {
++                        ver = discovered.value();
++                        return true;
++                    }
++                }
++            }
++        }
++
++        // The installed Series 60 package names the version the device is, and
++        // an EKA1 ROM has nothing else that does.
++        loader::rom_dir *install_dir = romf.burn_tree_find_dir("Z:\\system\\install");
++
++        if (!install_dir) {
++            return false;
++        }
++
++        bool found = false;
++
++        for (const loader::rom_entry &entry : install_dir->entries) {
++            const std::string name_utf8 = common::lowercase_string(common::ucs2_to_utf8(entry.name));
++
++            if (name_utf8.compare(0, 9, "series60v") != 0) {
++                continue;
++            }
++
++            const common::pystr name(name_utf8);
++
++            auto version_strings = name.split('.');
++
++            if (version_strings.size() < 2) {
++                continue;
++            }
++
++            const int major = version_strings[0].substr(9, std::string::npos).as_int<int>();
++            const int minor = version_strings[1].as_int<int>();
++
++            const std::optional<epocver> discovered = get_epocver_through_sis_name_version(major, minor);
++
++            if (discovered && (!found || (discovered.value() > ver))) {
++                ver = discovered.value();
++                found = true;
++            }
++        }
++
++        if (!found) {
++            for (const loader::rom_entry &entry : install_dir->entries) {
++                const std::string name = common::lowercase_string(common::ucs2_to_utf8(entry.name));
++
++                if (name == "series80v20.sis") {
++                    ver = epocver::epoc7;
++                    return true;
++                }
++
++                if (name == "series80v10.sis") {
++                    ver = epocver::epoc6;
++                    return true;
++                }
++            }
++        }
++
++        return found;
++    }
++
++    bool determine_device_from_rom(loader::rom &romf, common::ro_stream *stream, std::string &manufacturer,
++        std::string &firmcode, std::string &model, epocver &ver) {
++        if (!determine_symbian_version_from_rom(romf, stream, ver)) {
++            LOG_WARN(SYSTEM, "The ROM does not say which Symbian it is; assuming the default");
++        }
++
++        std::string product_txt;
++
++        if (read_rom_file(romf, stream, "Z:\\resource\\versions\\product.txt", product_txt)) {
++            common::ini_file product_ini;
++
++            if (product_ini.load_from_memory(product_txt, false) == 0) {
++                auto manufacturer_node = product_ini.find("Manufacturer");
++                auto product_node = product_ini.find("Product");
++                auto model_node = product_ini.find("Model");
++
++                if (manufacturer_node && product_node && model_node) {
++                    manufacturer = manufacturer_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++                    firmcode = product_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++                    model = model_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++
++                    return true;
++                }
++            }
++        }
++
++        // The older layout: one file of newline separated fields, in UCS-2.
++        std::string sw_txt;
++
++        if (!read_rom_file(romf, stream, "Z:\\system\\versions\\sw.txt", sw_txt)
++            && !read_rom_file(romf, stream, "Z:\\system\\versions\\langsw.txt", sw_txt)) {
++            return false;
++        }
++
++        common::dynamic_ifile sw_file(sw_txt, true);
++        std::string line_buffer;
++
++        sw_file.getline(line_buffer);
++
++        common::pystr sw_line_py(line_buffer);
++        auto sw_infos = sw_line_py.split("\\n");
++
++        if (sw_infos.size() < 3) {
++            return false;
++        }
++
++        firmcode = sw_infos[2].strip_reserverd().std_str();
++        manufacturer = (sw_infos.size() >= 4) ? sw_infos[3].strip_reserverd().std_str() : "Unknown";
++
++        std::string model_txt;
++
++        if (read_rom_file(romf, stream, "Z:\\system\\versions\\model.txt", model_txt)) {
++            common::dynamic_ifile model_file(model_txt, true);
++            model_file.getline(model);
++        } else {
++            model = sw_infos[0].strip_reserverd().std_str();
++        }
++
++        return true;
++    }
+ }
+\ No newline at end of file

@@ -62,6 +62,11 @@ namespace chimera {
         // device, which is a separate question.
         void startup();
 
+        // Works out which device a ROM is - from the ROM - and registers it.
+        // The machine then has one device, and its ROM is that file wherever
+        // it happens to be. False when the ROM says nothing recognisable.
+        bool add_device_from_rom(const std::string &rom_path);
+
         // How many devices the storage holds, and whether one could be set.
         std::size_t device_count() const;
         bool set_device(const std::size_t index);

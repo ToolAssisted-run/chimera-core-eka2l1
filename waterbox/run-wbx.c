@@ -2,50 +2,23 @@
  * miniBox host and reports what the machine did in run-native's exact format,
  * so the sandboxed build can be diffed against the native reference.
  *
- * usage: run-wbx <core.wbx> [--frames N] [--device device.info --rom SYM.ROM]
+ * usage: run-wbx <core.wbx> [--frames N] [--rom SYM.ROM] [--run 0xUID]
  *
- * Without a device the machine inside the box is the empty one and its
- * workload is a kernel timer every millisecond, which is what run-native
- * drives with `--frames N --timer-us 1000`. With one, the pack carries drive Z
- * and the ROM is mounted under the exact name the emulator opens it by - which
- * is upstream's construction, not ours, and is what run-native prints with
- * --print-rom-path.
+ * Without a ROM the machine inside the box is the empty one and its workload is
+ * a kernel timer every millisecond, which is what run-native drives with
+ * `--frames N --timer-us 1000`. With one, that single file is the whole device:
+ * it says which device it is and it carries drive Z.
  */
 #include "minibox.h"
 
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
 
 typedef struct {
 	FILE *f;
 } freader;
-
-/* The firmware code, out of the pack's header: the ROM's mount name is built
- * from it, and the guest reads the same field to register the device. */
-static int pack_firmcode(const char *path, char *out, size_t outsz)
-{
-	FILE *f = fopen(path, "rb");
-	if (!f) return 0;
-
-	char magic[12];
-	uint32_t version = 0, entries = 0, epocver = 0, machine_uid = 0, length = 0;
-	int ok = fread(magic, 1, sizeof magic, f) == sizeof magic
-		&& memcmp(magic, "CHIMERADEVPK", sizeof magic) == 0
-		&& fread(&version, 4, 1, f) == 1 && version == 1
-		&& fread(&entries, 4, 1, f) == 1
-		&& fread(&epocver, 4, 1, f) == 1
-		&& fread(&machine_uid, 4, 1, f) == 1
-		&& fread(&length, 4, 1, f) == 1
-		&& length + 1 < outsz
-		&& fread(out, 1, length, f) == length;
-
-	if (ok) out[length] = '\0';
-	fclose(f);
-	return ok;
-}
 
 static intptr_t file_read(uintptr_t ud, uint8_t *d, uintptr_t s)
 {
@@ -68,13 +41,12 @@ static uintptr_t proc(mb_host *h, const char *n)
 
 int main(int argc, char **argv)
 {
-	const char *core = NULL, *pack = NULL, *rom = NULL;
+	const char *core = NULL, *rom = NULL;
 	long frames = 60;
 	uint32_t run_uid = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
-		else if (!strcmp(argv[i], "--device") && i + 1 < argc) pack = argv[++i];
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (argv[i][0] != '-' && !core) core = argv[i];
@@ -99,24 +71,11 @@ int main(int argc, char **argv)
 	mb_host *h = (mb_host *)r.data;
 
 	printf("host created\n"); fflush(stdout);
-	/* The device, if there is one: the pack under the name the guest opens,
-	 * and the ROM under the name the emulator itself builds. */
-	if (pack) {
-		wbx_mount_file_path(h, "device.info", pack, &r);
-		if (r.error_message[0]) { fprintf(stderr, "mount pack: %s\n", r.error_message); return 1; }
-
-		char firm[64];
-		if (!pack_firmcode(pack, firm, sizeof firm)) { fprintf(stderr, "%s is not a device descriptor\n", pack); return 1; }
-
-		for (char *c = firm; *c; c++) *c = (char)tolower((unsigned char)*c);
-
-		if (rom) {
-			char romname[256];
-			snprintf(romname, sizeof romname, "data/roms//%s/SYM.ROM", firm);
-			wbx_mount_file_path(h, romname, rom, &r);
-			if (r.error_message[0]) { fprintf(stderr, "mount %s: %s\n", romname, r.error_message); return 1; }
-			printf("mounted %s\n", romname);
-		}
+	/* The device, if there is one: one file, under the name the guest opens
+	 * its firmware by. */
+	if (rom) {
+		wbx_mount_file_path(h, "rom", rom, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount rom: %s\n", r.error_message); return 1; }
 	}
 
 	intfn Init = (intfn)proc(h, "Init");

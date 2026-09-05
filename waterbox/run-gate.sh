@@ -163,12 +163,10 @@ else
 			pass=$((pass + 1))
 		fi
 
-		# A storage root holding only the ROM: everything below runs against
-		# the ROM and the descriptor, the way a core will.
-		python3 "$here/gen-device-info.py" --storage "$work/device" --out "$work/device.info" > /dev/null
+		# Everything below runs against the ROM and nothing else, the way a
+		# core will: an empty storage root, and one file.
 		rm -rf "$work/romonly"
-		mkdir -p "$work/romonly/roms/nem-4"
-		cp "$work/device/roms/nem-4/SYM.ROM" "$work/romonly/roms/nem-4/"
+		mkdir -p "$work/romonly"
 
 		# ---- the machine on a real OpenGL context ---------------------------
 		# The emulator's renderer runs on a context the harness made and never
@@ -180,7 +178,8 @@ else
 		gpu() {
 			rm -rf "$work/gpu"
 			cp -r "$work/romonly" "$work/gpu"
-			timeout 900 "$rn" --data "$work/gpu" --device "$work/device.info" --gpu 				--frames 120 --run 0x10005902 2>/dev/null | grep -E '^(gpu|screen|instructions):'
+			timeout 900 "$rn" --data "$work/gpu" --rom-only "$rom" --gpu --frames 120 \
+				--run 0x10005902 2>/dev/null | grep -E '^(gpu|screen|instructions):'
 		}
 
 		one_gpu="$(gpu)"
@@ -199,11 +198,10 @@ else
 		fi
 
 		# ---- the device inside the sandbox ---------------------------------
-		# Two files cross into the box: the ROM, under the name the emulator
-		# opens it by, and a fifty-seven byte descriptor saying which device it
-		# is. Drive Z is the ROM's own filesystem; the writable drives are the
-		# machine's own memory. Both flavors then run the same application, and
-		# what the processor did must be identical.
+		# One file crosses into the box: the ROM. It says which device it is,
+		# it carries drive Z, and the writable drives are the machine's own
+		# memory. Both flavors then run the same application, and what the
+		# processor did must be identical.
 		if [ ! -x "$rw" ] || [ ! -f "$core" ]; then
 			echo "SKIP in-box: core.wbx not built"
 		else
@@ -211,8 +209,8 @@ else
 			# Sorted: the two report the same facts, not necessarily in the
 			# same order - one learns the application count while booting, the
 			# other when asked.
-			natp="$(timeout 900 "$rn" --data "$work/romonly" --device "$work/device.info" --frames 60 --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
-			boxp="$(timeout 900 "$rw" "$core" --frames 60 --device "$work/device.info" --rom "$rom" --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
+			natp="$(timeout 900 "$rn" --data "$work/romonly" --rom-only "$rom" --frames 60 --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
+			boxp="$(timeout 900 "$rw" "$core" --frames 60 --rom "$rom" --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
 
 			if [ -z "$boxp" ]; then
 				echo "FAIL in-box (the sandbox produced nothing)"; fail=$((fail + 1))

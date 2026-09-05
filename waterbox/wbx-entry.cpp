@@ -1,10 +1,10 @@
 // EKA2L1 as a Chimera waterbox core: the entry points miniBox calls.
 //
-// The device arrives as two mounted files: the ROM the machine maps into its
-// own memory, under the path the emulator looks for it at, and a pack holding
-// drive Z, which the machine serves from memfs.cpp. With neither of them the
-// machine is still built and still keeps time, which is what the equivalence
-// gate compares when no device dump is present.
+// The device arrives as ONE mounted file: the ROM. It says which device it is,
+// it carries drive Z, and the machine maps it. The writable drives are the
+// machine's own memory (memfs.cpp). Without it the machine is still built and
+// still keeps time, which is what the equivalence gate compares when no ROM is
+// present.
 #include "machine.h"
 #include "memfs.h"
 
@@ -53,9 +53,9 @@ namespace {
     std::shared_ptr<chimera::memory_file_system> g_drives;
     bool g_device = false;
 
-    // The device descriptor the host mounts, if it mounted one: which device
-    // this is and which Symbian it runs. Drive Z itself comes from the ROM.
-    constexpr const char *DESCRIPTOR_NAME = "device.info";
+    // The ROM, under the name a chimera host mounts a core's firmware by. It
+    // says which device it is and it carries drive Z.
+    constexpr const char *ROM_NAME = "rom";
 }
 
 extern "C" {
@@ -82,40 +82,15 @@ ECL_EXPORT int Init(void) {
     eka2l1::file_system_inst as_instance = g_drives;
     g_machine->sys()->get_io_system()->add_filesystem(as_instance);
 
-    if (g_drives->read_device_info(DESCRIPTOR_NAME)) {
+    if (g_machine->add_device_from_rom(ROM_NAME)) {
         // Writable drives for whatever the machine puts on them. They are
         // empty, they are the machine's, and they travel in its savestates.
         g_drives->mount_empty(drive_c, drive_media::physical, io_attrib_internal);
         g_drives->mount_empty(drive_d, drive_media::physical, io_attrib_internal);
         g_drives->mount_empty(drive_e, drive_media::physical, io_attrib_removeable);
 
-        eka2l1::device_manager *devices = g_machine->sys()->get_device_manager();
-
-        devices->add_new_device(g_drives->device_firmcode(), g_drives->device_model(),
-            g_drives->device_manufacturer(), static_cast<epocver>(g_drives->device_epocver()),
-            g_drives->device_machine_uid());
-
-        // The ROM is the one file the machine still reads from the host, and
-        // it reads it by a name the emulator builds rather than one we choose.
-        // Saying which name, and whether anything is mounted under it, is the
-        // difference between a diagnosable failure and a silent one.
-        const std::string rom_path = eka2l1::add_path(options.storage,
-            eka2l1::add_path(eka2l1::preset::ROM_FOLDER_PATH,
-                eka2l1::add_path(eka2l1::common::lowercase_string(g_drives->device_firmcode()),
-                    eka2l1::preset::ROM_FILENAME)));
-
-        std::FILE *rom = std::fopen(rom_path.c_str(), "rb");
-
-        if (!rom) {
-            std::snprintf(g_loadError, sizeof g_loadError, "nothing is mounted at %s", rom_path.c_str());
-            return 0;
-        }
-
-        std::fclose(rom);
-
         if (!g_machine->set_device(0)) {
-            std::snprintf(g_loadError, sizeof g_loadError, "the device in %s was refused (rom %s)",
-                DESCRIPTOR_NAME, rom_path.c_str());
+            std::snprintf(g_loadError, sizeof g_loadError, "the device in the ROM was refused");
             return 0;
         }
 

@@ -13,7 +13,10 @@
 #include <services/window/screen.h>
 #include <services/window/window.h>
 #include <package/manager.h>
+#include <vfs/vfs.h>
+#include <loader/rom.h>
 #include <system/devices.h>
+#include <system/software.h>
 #include <system/epoc.h>
 
 #include <algorithm>
@@ -144,6 +147,42 @@ namespace chimera {
 
         return eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
             eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
+    }
+
+    bool machine::add_device_from_rom(const std::string &rom_path) {
+        eka2l1::symfile rom_file = eka2l1::physical_file_proxy(rom_path, READ_MODE | BIN_MODE);
+
+        if (!rom_file) {
+            return false;
+        }
+
+        eka2l1::ro_file_stream rom_stream(rom_file.get());
+        std::optional<eka2l1::loader::rom> parsed = eka2l1::loader::load_rom(
+            reinterpret_cast<eka2l1::common::ro_stream *>(&rom_stream));
+
+        if (!parsed) {
+            return false;
+        }
+
+        std::string manufacturer;
+        std::string firmcode;
+        std::string model;
+        epocver ver = epocver::epoc94;
+
+        if (!eka2l1::loader::determine_device_from_rom(parsed.value(),
+                reinterpret_cast<eka2l1::common::ro_stream *>(&rom_stream), manufacturer, firmcode, model, ver)) {
+            return false;
+        }
+
+        if (sys_->get_device_manager()->add_new_device(firmcode, model, manufacturer, ver, 0)
+            != eka2l1::add_device_none) {
+            return false;
+        }
+
+        // And it is that file, not one under a storage layout nobody built.
+        sys_->set_rom_path(rom_path);
+
+        return true;
     }
 
     std::size_t machine::device_count() const {

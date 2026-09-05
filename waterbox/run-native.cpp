@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     bool list_apps = false;
     std::string run_path;
     std::string probe_path;
-    std::string device_info_path;
+    std::string rom_only_path;
     bool print_rom_path = false;
     bool verbose = false;
     bool gpu = false;
@@ -106,8 +106,8 @@ int main(int argc, char **argv) {
             options.host_clock = true;
         } else if ((std::strcmp(argv[i], "--probe") == 0) && has_value) {
             probe_path = argv[++i];
-        } else if ((std::strcmp(argv[i], "--device") == 0) && has_value) {
-            device_info_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--rom-only") == 0) && has_value) {
+            rom_only_path = argv[++i];
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
             gpu = true;
         } else if ((std::strcmp(argv[i], "--screen-out") == 0) && has_value) {
@@ -139,15 +139,16 @@ int main(int argc, char **argv) {
         eka2l1::log::toggle_console();
     }
 
-    // With a pack, the drives come from the machine's own memory - the same
-    // filesystem the sandbox uses, exercised where it can be debugged.
-    options.in_memory_drives = !device_info_path.empty();
+    // With a ROM and nothing else, the writable drives come from the machine's
+    // own memory - the same filesystem the sandbox uses, exercised where it can
+    // be debugged - and drive Z comes from the ROM.
+    options.in_memory_drives = !rom_only_path.empty();
 
     chimera::machine machine(options);
 
     std::shared_ptr<chimera::memory_file_system> drives;
 
-    if (!device_info_path.empty()) {
+    if (!rom_only_path.empty()) {
         drives = std::make_shared<chimera::memory_file_system>();
     }
 
@@ -177,8 +178,8 @@ int main(int argc, char **argv) {
         eka2l1::file_system_inst as_instance = drives;
         machine.sys()->get_io_system()->add_filesystem(as_instance);
 
-        if (!drives->read_device_info(device_info_path)) {
-            std::fprintf(stderr, "%s is not a device descriptor\n", device_info_path.c_str());
+        if (!machine.add_device_from_rom(rom_only_path)) {
+            std::fprintf(stderr, "%s does not say which device it is\n", rom_only_path.c_str());
             return 1;
         }
 
@@ -186,11 +187,10 @@ int main(int argc, char **argv) {
         drives->mount_empty(drive_d, drive_media::physical, io_attrib_internal);
         drives->mount_empty(drive_e, drive_media::physical, io_attrib_removeable);
 
-        machine.sys()->get_device_manager()->add_new_device(drives->device_firmcode(),
-            drives->device_model(), drives->device_manufacturer(),
-            static_cast<epocver>(drives->device_epocver()), drives->device_machine_uid());
+        const eka2l1::device &detected = machine.sys()->get_device_manager()->get_devices()[0];
 
-        std::printf("descriptor: device %s\n", drives->device_firmcode().c_str());
+        std::printf("rom: %s %s (%s) epocver=%d\n", detected.manufacturer.c_str(),
+            detected.model.c_str(), detected.firmware_code.c_str(), static_cast<int>(detected.ver));
     }
 
     const std::size_t devices = machine.device_count();

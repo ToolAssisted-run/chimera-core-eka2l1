@@ -38,21 +38,9 @@ namespace chimera {
         memory_file_system();
         ~memory_file_system();
 
-        // Reads the device descriptor the host mounted under `name`: which
-        // device this is, which Symbian it runs, and what its machine uid is.
-        // The descriptor is all the machine needs beside its ROM.
-        bool read_device_info(const std::string &name);
-
         // Mounts an empty writable drive.
         bool mount_empty(const drive_number drv, const drive_media media,
             const std::uint32_t attrib);
-
-        // What the descriptor said. Empty until one is read.
-        const std::string &device_firmcode() const { return firmcode_; }
-        const std::string &device_model() const { return model_; }
-        const std::string &device_manufacturer() const { return manufacturer_; }
-        std::uint32_t device_epocver() const { return epocver_; }
-        std::uint32_t device_machine_uid() const { return machine_uid_; }
 
         // Diagnostics: how many entries the tree holds, and how many bytes the
         // machine has written into it.
@@ -88,10 +76,5 @@ namespace chimera {
         std::array<std::pair<eka2l1::drive, bool>, drive_z + 1> mappings_;
 
         epocver version_ = epocver::epoc6;
-        std::string firmcode_;
-        std::string model_;
-        std::string manufacturer_;
-        std::uint32_t epocver_ = 0;
-        std::uint32_t machine_uid_ = 0;
     };
 }

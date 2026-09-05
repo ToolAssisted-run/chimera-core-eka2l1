@@ -252,11 +252,20 @@ enumerates its own directories rather than borrowing the host's. Its tree walker
 throws on a path with nothing after the drive, which nothing used to reach because
 of that same gate, so the lookups are guarded.
 
-What crosses into the sandbox is therefore the ROM and a **fifty-seven byte
-descriptor** naming the device and its Symbian version - no unpacked drive Z at
-all. Drive Z is the ROM's; C, D and E are the machine's own memory. Native and
-sandbox run the machine's menu to the same 682,640 instructions, and the extracted
-copy no longer changes the answer on either side.
+What crosses into the sandbox is therefore **the ROM, and nothing else** - no
+unpacked drive Z, and since patch 0018 no descriptor either. Drive Z is the ROM's;
+C, D and E are the machine's own memory. Native and sandbox run the machine's menu
+to the same 682,640 instructions, and an unpacked copy no longer changes the answer
+on either side.
+
+**A ROM says which device it is (0018).** `determine_device_from_rom` reads the
+same files the folder-based detection reads - `resource/versions/platform.txt` and
+`product.txt`, or the older `system/versions/sw.txt` and `model.txt`, and the
+`series60v*.sis` names in `system/install` - straight out of the image, using the
+memory forms of the INI and text readers that 0015 added. `system::set_rom_path`
+then lets the ROM be wherever the embedder put it rather than under a storage
+layout nobody built. The user's SYM.ROM answers `(c)NMP V 4.03 (NEM-4)`, epoc6,
+which is exactly what unpacking it and inspecting the folder gives.
 
 ## The machine on a real OpenGL context (M4, 2026-09-05, unfinished)
 
