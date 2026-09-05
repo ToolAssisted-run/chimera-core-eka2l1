@@ -328,6 +328,34 @@ else
 					pass=$((pass + 1))
 				fi
 
+				# ---- the keypad reaches the game ------------------------
+				# A key held near the end of the run, and the screen read
+				# straight afterwards: the game must answer it, and both
+				# flavors must answer it the same way. Down on the menu moves
+				# the selection, which is the shortest thing to see.
+				digest6='^(instructions|screen):'
+
+				rm -rf "$work/key"
+				mkdir -p "$work/key"
+
+				natk="$(timeout 1800 "$rn" --data "$work/key" --rom-only "$rom" --frames 3200 --card "$card" --press 1 2>&1 | grep -E "$digest6" | sort)"
+				boxk="$(timeout 1800 "$rw" "$core" --frames 3200 --rom "$rom" --game "$card" --press 1 2>&1 | grep -E "$digest6" | sort)"
+				natq="$(timeout 1800 "$rn" --data "$work/key" --rom-only "$rom" --frames 3200 --card "$card" 2>&1 | grep -E '^screen:')"
+
+				if [ -z "$boxk" ]; then
+					echo "FAIL keypad (the sandbox produced nothing)"; fail=$((fail + 1))
+				elif [ "$natk" = "$natq" ] || ! echo "$natk" | grep -q "^screen:"; then
+					echo "FAIL keypad (the key changed nothing)"; echo "$natk"; fail=$((fail + 1))
+				elif [ "$natk" != "$boxk" ]; then
+					echo "FAIL keypad (native vs sandbox)"
+					echo "$natk" > "$work/natk.txt"
+					echo "$boxk" > "$work/boxk.txt"
+					diff "$work/natk.txt" "$work/boxk.txt" | head -20; fail=$((fail + 1))
+				else
+					echo "PASS keypad: the game answered the key, native == sandbox ($(echo "$boxk" | grep '^screen:'))"
+					pass=$((pass + 1))
+				fi
+
 				# ---- a state outlives the process that wrote it ---------
 				# What a movie asks of a core: one process saves, another one
 				# loads and carries on, and the machine is the same machine.

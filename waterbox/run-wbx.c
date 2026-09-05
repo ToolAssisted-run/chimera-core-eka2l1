@@ -3,7 +3,7 @@
  * so the sandboxed build can be diffed against the native reference.
  *
  * usage: run-wbx <core.wbx> [--frames N] [--rom SYM.ROM] [--run 0xUID]
- *                [--rerecord] [--state-out FILE] [--state-in FILE]
+ *                [--rerecord] [--state-out FILE] [--state-in FILE] [--press N]
  *
  * --rerecord saves and reloads the machine before every single frame. If any
  * of the machine lives outside the sandbox's memory - or the core keeps a
@@ -89,6 +89,7 @@ int main(int argc, char **argv)
 	uint32_t run_uid = 0;
 	int rerecord = 0;
 	const char *state_out = NULL, *state_in = NULL;
+	long press = -1;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
@@ -99,6 +100,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--rerecord")) rerecord = 1;
 		else if (!strcmp(argv[i], "--state-out") && i + 1 < argc) state_out = argv[++i];
 		else if (!strcmp(argv[i], "--state-in") && i + 1 < argc) state_in = argv[++i];
+		else if (!strcmp(argv[i], "--press") && i + 1 < argc) press = strtol(argv[++i], NULL, 10);
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
 	}
@@ -191,7 +193,17 @@ int main(int argc, char **argv)
 		printf("run: 0x%08x %s\n", run_uid, LaunchAppUid(run_uid) ? "started" : "refused");
 	}
 
+	typedef void (MB_GUEST_ABI *btnfn)(int32_t, int32_t);
+	btnfn SetButton = (btnfn)proc(h, "SetButton");
+
 	for (long f = 0; f < frames; f++) {
+		/* Held near the end, exactly as the native reference holds it: what a
+		 * key did is read off the last frame's screen. */
+		if (press >= 0) {
+			if (f == frames - 200) SetButton((int32_t)press, 1);
+			else if (f == frames - 180) SetButton((int32_t)press, 0);
+		}
+
 		if (rerecord) {
 			mb_return sr;
 

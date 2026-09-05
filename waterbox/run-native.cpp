@@ -24,6 +24,7 @@ extern "C" void *chimera_egl_proc(const char *name);
 #include <services/applist/applist.h>
 #include <services/window/classes/winbase.h>
 #include <services/window/classes/winuser.h>
+#include <services/window/classes/wingroup.h>
 #include <services/window/screen.h>
 #include <services/window/window.h>
 #include <common/path.h>
@@ -92,6 +93,7 @@ int main(int argc, char **argv) {
     std::string install_path;
     std::string card_path;
     int press_button = -1;
+    int press_raw = -1;
     bool print_rom_path = false;
     bool verbose = false;
     bool gpu = false;
@@ -116,6 +118,8 @@ int main(int argc, char **argv) {
             probe_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--press") == 0) && has_value) {
             press_button = std::atoi(argv[++i]);
+        } else if ((std::strcmp(argv[i], "--press-raw") == 0) && has_value) {
+            press_raw = static_cast<int>(std::strtol(argv[++i], nullptr, 0));
         } else if ((std::strcmp(argv[i], "--card") == 0) && has_value) {
             card_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--install") == 0) && has_value) {
@@ -441,11 +445,36 @@ int main(int argc, char **argv) {
     for (int i = 0; i < frames; i++) {
         // A key held for a moment in the middle of the run: the shortest way
         // to ask whether a machine that has gone quiet is waiting for input.
+        // Held near the end of the run, not in the middle: what a key did is
+        // read off the screen at the last frame, and a menu that has been left
+        // alone for twenty emulated seconds has usually gone back to whatever
+        // it does when nobody is there. Two hundred frames is long enough to
+        // see the answer and short enough that it is still on screen.
         if (press_button >= 0) {
-            if (i == frames / 3) {
+            if (i == frames - 200) {
                 machine.set_button(press_button, true);
-            } else if (i == frames / 3 + 6) {
+            } else if (i == frames - 180) {
                 machine.set_button(press_button, false);
+            }
+        }
+
+        // A scan code straight into the window server, past the keypad map:
+        // the only way to ask a machine which keys its application answers to,
+        // rather than which keys the keypad was built to send.
+        if ((press_raw >= 0) && ((i == frames - 200) || (i == frames - 180))) {
+            eka2l1::window_server *ws = reinterpret_cast<eka2l1::window_server *>(
+                machine.sys()->get_kernel_system()->get_by_name<eka2l1::service::server>(
+                    eka2l1::get_winserv_name_by_epocver(machine.sys()->get_symbian_version_use())));
+
+            if (ws) {
+                eka2l1::drivers::input_event raw;
+
+                raw.type_ = eka2l1::drivers::input_event_type::key_raw;
+                raw.key_.state_ = (i == frames - 200) ? eka2l1::drivers::key_state::pressed
+                                                        : eka2l1::drivers::key_state::released;
+                raw.key_.code_ = static_cast<std::uint32_t>(press_raw);
+
+                ws->queue_input_from_driver(raw);
             }
         }
 
@@ -541,6 +570,24 @@ int main(int argc, char **argv) {
             } walker;
 
             winserv->get_screen(0)->root->walk_tree_back_to_front(&walker);
+
+            // And the window groups: which applications the machine has on
+            // screen, and which one the keys go to.
+            eka2l1::epoc::screen *scr0 = winserv->get_screen(0);
+            const eka2l1::epoc::window_group *focused = scr0->focus;
+
+            for (eka2l1::epoc::window *w = scr0->root->child; w != nullptr; w = w->sibling) {
+                if (w->type != eka2l1::epoc::window_kind::group) {
+                    continue;
+                }
+
+                eka2l1::epoc::window_group *grp = reinterpret_cast<eka2l1::epoc::window_group *>(w);
+
+                std::printf("group: %4d %-8s %-9s %s\n", grp->id,
+                    (grp == focused) ? "FOCUSED" : "",
+                    grp->can_receive_focus() ? "focusable" : "no-focus",
+                    eka2l1::common::ucs2_to_utf8(grp->name).c_str());
+            }
         }
 
         // Every thread the machine has and what it is doing. A machine that

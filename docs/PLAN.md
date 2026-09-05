@@ -493,3 +493,36 @@ The card leg now passes no `--run` at all: the sandbox boots the phone, installs
 the card, starts Red Faction and draws it, and the native reference does exactly
 the same thing (`launched: 0x101fd3d0`, 219,242,497 instructions, screen
 7326d676ffda67e5 on both sides).
+
+## The keypad, and how to ask a machine what it wants (2026-09-05)
+
+With a game finally running, the keypad could be checked against something that
+answers. It works, and the mapping written blind in M5 turns out to be right -
+but finding that out took a lesson worth keeping.
+
+The first four attempts said input did nothing. All four pressed a key a third
+of the way into the run and read the screen at the end. Red Faction's menu goes
+back to its attract loop after a few seconds of nobody there, so every run ended
+on the same picture whatever had been pressed. **Press near the end and read the
+screen straight afterwards**: `--press` in both harnesses now holds a key at
+frame N-200 and lets it go at N-180, and the answer is on the last frame.
+
+What actually reaches the game was settled by sweeping every one of the 256 scan
+codes straight into the window server, past the keypad map (`--press-raw`). On
+the main menu the game answers exactly three of them: 0x10 and 0x11 (up and down
+arrows) move the selection, and 0x35 ('5') chooses. The soft keys and the call
+key do something too. That is the N-Gage keypad the core declares, so nothing
+had to change.
+
+The gate now holds Down on the menu and checks that the game answers - and that
+both flavors answer identically (`screen: 176x208 digest e5e24b9c5448a039`).
+
+## End to end, through chimera itself (2026-09-05)
+
+The core was also run the way a user will run it: a hand-written
+`.chimeraProject` naming the ROM in the `rom` slot and the game card in the
+`game` slot, played headlessly by `chimera-run` against the packaged
+`eka2l1.chimeraCore`. It boots, installs, starts the game, draws the title
+screen at frame 1499 and the menu at 3000, and a movie that holds Down at 3000
+moves the selection. That is the whole path - project, engine, package, sandbox,
+picture, input - with nothing of the harness in it.
