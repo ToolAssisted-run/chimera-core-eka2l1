@@ -281,12 +281,25 @@ makes its 176x208 screen, the screen is composed on demand
 (`scan_for_redraw(..., force)`) and read back through the command list, and two
 runs give the same digest.
 
-**What is missing is the picture.** The screen reads back all zeroes: the
-compositor draws nothing into it. The AVKON shell is alive - it logs a status pane
-redraw - but the window server also complains "Region object's header data size is
-not 4 bytes" on this EKA1 device, and the menu application stops at an
-unimplemented application-list opcode. That is upstream compatibility with this
-particular ROM rather than anything the core brings, and it is where M4 continues.
+**What is missing is the picture, and it is not the plumbing.** The screen reads
+back all zeroes. Walking the window tree at the moment of the read says why: the
+compositor has 15 windows, 12 of them client canvases, and exactly ONE of them
+passes `can_be_physically_seen()` - visible, with a non-empty visible region - and
+that one has nothing recorded to draw. The compositor clears to transparent black
+and finds nothing to put on top, which is exactly the all-zero screen.
+
+Every system application of this ROM behaves the same way, including ones that run
+millions of instructions first (Help runs 13 million). The window server rejects a
+`set_clipping_region` because "Region object's header data size is not 4 bytes" -
+an EKA1 command shape its parser does not accept - the AVKON capability server
+answers an unimplemented opcode with a fake success, and the menu application stops
+at an unimplemented application-list opcode. The S60v1 user-interface framework
+does not come up far enough for its applications to paint.
+
+That is upstream compatibility with this particular ROM's UI shell, not anything
+the core brings, and the machine it matters for is a **game**: an N-Gage title
+creates its own window and draws into it directly rather than through AVKON.
+Proving the picture therefore waits on a game to run - see the open questions.
 
 ## Open questions
 
