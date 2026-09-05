@@ -175,8 +175,15 @@ networking, no real audio or input devices.
   game is still not loadable.
 - **M5 (was) - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
   a real game card booting to its title screen.
-- **M6 - savestates and rewind.** Arena snapshots, the rewind leg, the GPU-state rule
-  the bridge already carries.
+- **M6 - savestates and rewind. DONE 2026-09-05.** It needed no code in the core: the
+  whole machine lives in the sandbox's arena, and because the picture is read out of
+  the machine's own memory rather than off a GPU there is nothing session-local to
+  lose. Two gate legs prove it. `state`: the machine saved and reloaded before EVERY
+  frame runs identically to one that was not (60 round trips of an 8.4 MB state; the
+  game's is 18.9 MB and 1,500 round trips still match instruction for instruction and
+  pixel for pixel). `session`: 600 frames saved in one process, the other 900 run in
+  another, and the machine ends where the uninterrupted run did - which is what a
+  movie asks of a core, and the leg a core holding a graphics context fails.
 - **M7 - the package. DONE 2026-09-05.** `eka2l1.zip` builds and installs into a chimera
   checkout: `waterbox.config` (a Symbian machine, a 176x208 screen at 60 Hz, 44100 Hz
   stereo, a 21-key Series 60 keypad), `file_slots.json` (one slot - the DEVICE ROM, since

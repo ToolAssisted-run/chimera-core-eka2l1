@@ -3,6 +3,15 @@
  * so the sandboxed build can be diffed against the native reference.
  *
  * usage: run-wbx <core.wbx> [--frames N] [--rom SYM.ROM] [--run 0xUID]
+ *                [--rerecord] [--state-out FILE] [--state-in FILE]
+ *
+ * --rerecord saves and reloads the machine before every single frame. If any
+ * of the machine lives outside the sandbox's memory - or the core keeps a
+ * pointer across a load - the run diverges from an ordinary one.
+ *
+ * --state-out writes the machine to a file once the frames are done, and
+ * --state-in starts from one instead of launching anything: a state written by
+ * one process and read by another, which is what a movie asks of a core.
  *
  * Without a ROM the machine inside the box is the empty one and its workload is
  * a kernel timer every millisecond, which is what run-native drives with
@@ -19,6 +28,40 @@
 typedef struct {
 	FILE *f;
 } freader;
+
+/* The savestate, in memory: written into on save, read back on load. */
+struct statebuf { uint8_t *p; size_t len, cap, pos; };
+static struct statebuf g_state;
+
+static int32_t state_write(uintptr_t ud, const uint8_t *d, uintptr_t n)
+{
+	struct statebuf *b = (struct statebuf *)ud;
+
+	if (b->len + n > b->cap) {
+		size_t want = (b->len + n) * 2;
+		uint8_t *q = (uint8_t *)realloc(b->p, want);
+
+		if (!q) return -1;
+
+		b->p = q; b->cap = want;
+	}
+
+	memcpy(b->p + b->len, d, n);
+	b->len += n;
+	return 0;
+}
+
+static intptr_t state_read(uintptr_t ud, uint8_t *d, uintptr_t n)
+{
+	struct statebuf *b = (struct statebuf *)ud;
+	size_t left = b->len - b->pos;
+
+	if (n > left) n = left;
+
+	memcpy(d, b->p + b->pos, n);
+	b->pos += n;
+	return (intptr_t)n;
+}
 
 static intptr_t file_read(uintptr_t ud, uint8_t *d, uintptr_t s)
 {
@@ -44,6 +87,8 @@ int main(int argc, char **argv)
 	const char *core = NULL, *rom = NULL, *game = NULL;
 	long frames = 60, timer_us = 0;
 	uint32_t run_uid = 0;
+	int rerecord = 0;
+	const char *state_out = NULL, *state_in = NULL;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
@@ -51,6 +96,9 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--game") && i + 1 < argc) game = argv[++i];
 		else if (!strcmp(argv[i], "--timer-us") && i + 1 < argc) timer_us = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
+		else if (!strcmp(argv[i], "--rerecord")) rerecord = 1;
+		else if (!strcmp(argv[i], "--state-out") && i + 1 < argc) state_out = argv[++i];
+		else if (!strcmp(argv[i], "--state-in") && i + 1 < argc) state_in = argv[++i];
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
 	}
@@ -113,13 +161,68 @@ int main(int argc, char **argv)
 		SetTimerCheckUs((int32_t)timer_us);
 	}
 
-	if (run_uid) {
+	/* A state carries the running application with it, so a machine started
+	 * from one launches nothing. */
+	if (state_in) {
+		FILE *sf = fopen(state_in, "rb");
+		mb_return sr;
+
+		if (!sf) { fprintf(stderr, "cannot read %s\n", state_in); return 1; }
+
+		fseek(sf, 0, SEEK_END);
+		g_state.len = (size_t)ftell(sf);
+		fseek(sf, 0, SEEK_SET);
+		g_state.p = (uint8_t *)malloc(g_state.len);
+		g_state.cap = g_state.len;
+		g_state.pos = 0;
+
+		if (!g_state.p || fread(g_state.p, 1, g_state.len, sf) != g_state.len) {
+			fprintf(stderr, "short read of %s\n", state_in); return 1;
+		}
+
+		fclose(sf);
+		wbx_load_state(h, state_read, (uintptr_t)&g_state, &sr);
+		if (sr.error_message[0]) { fprintf(stderr, "load_state: %s\n", sr.error_message); return 1; }
+
+		printf("state in: %zu bytes\n", g_state.len);
+	} else if (run_uid) {
 		typedef int (MB_GUEST_ABI *runfn)(uint32_t);
 		runfn LaunchAppUid = (runfn)proc(h, "LaunchAppUid");
 		printf("run: 0x%08x %s\n", run_uid, LaunchAppUid(run_uid) ? "started" : "refused");
 	}
 
-	for (long f = 0; f < frames; f++) FrameAdvance(0);
+	for (long f = 0; f < frames; f++) {
+		if (rerecord) {
+			mb_return sr;
+
+			g_state.len = 0;
+			wbx_save_state(h, state_write, (uintptr_t)&g_state, &sr);
+			if (sr.error_message[0]) { fprintf(stderr, "save_state: %s\n", sr.error_message); return 1; }
+
+			g_state.pos = 0;
+			wbx_load_state(h, state_read, (uintptr_t)&g_state, &sr);
+			if (sr.error_message[0]) { fprintf(stderr, "load_state: %s\n", sr.error_message); return 1; }
+		}
+
+		FrameAdvance(0);
+	}
+
+	if (rerecord) printf("state bytes: %zu\n", g_state.len);
+
+	if (state_out) {
+		FILE *sf = fopen(state_out, "wb");
+		mb_return sr;
+
+		if (!sf) { fprintf(stderr, "cannot write %s\n", state_out); return 1; }
+
+		g_state.len = 0;
+		wbx_save_state(h, state_write, (uintptr_t)&g_state, &sr);
+		if (sr.error_message[0]) { fprintf(stderr, "save_state: %s\n", sr.error_message); return 1; }
+
+		fwrite(g_state.p, 1, g_state.len, sf);
+		fclose(sf);
+		printf("state out: %zu bytes\n", g_state.len);
+	}
 
 	u64fn GetDriveEntries = (u64fn)proc(h, "GetDriveEntries");
 	u64fn GetDriveWrittenBytes = (u64fn)proc(h, "GetDriveWrittenBytes");

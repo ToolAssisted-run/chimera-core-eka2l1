@@ -225,6 +225,25 @@ else
 				pass=$((pass + 1))
 			fi
 
+			# ---- the machine survives being saved and reloaded ----------
+			# Saved and reloaded before EVERY frame. Anything of the machine
+			# that lived outside the sandbox's memory, or any pointer the core
+			# kept across a load, would show up as a run that no longer matches
+			# an ordinary one.
+			srec="$(timeout 1800 "$rw" "$core" --frames 60 --rom "$rom" --run 0x101f4cd2 --rerecord 2>&1 | grep -E "$digest2" | sort)"
+
+			if [ -z "$srec" ]; then
+				echo "FAIL state (the rerecording run produced nothing)"; fail=$((fail + 1))
+			elif [ "$boxp" != "$srec" ]; then
+				echo "FAIL state (a save and reload before every frame changed the run)"
+				echo "$boxp" > "$work/boxp.txt"
+				echo "$srec" > "$work/srec.txt"
+				diff "$work/boxp.txt" "$work/srec.txt" | head -20; fail=$((fail + 1))
+			else
+				echo "PASS state: 60 saves and reloads, and the machine is the same one"
+				pass=$((pass + 1))
+			fi
+
 			# ---- a package installs into the machine --------------------
 			# Upstream's own test package, which is in this repository and
 			# needs no ROM of anybody's. It installs into drive C, which is
@@ -285,6 +304,30 @@ else
 					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
 				else
 					echo "PASS card: native == sandbox ($(echo "$boxc" | grep -E '^(instructions|screen):' | tr '\n' ' '))"
+					pass=$((pass + 1))
+				fi
+
+				# ---- a state outlives the process that wrote it ---------
+				# What a movie asks of a core: one process saves, another one
+				# loads and carries on, and the machine is the same machine.
+				# A core holding anything the host gave it - a graphics
+				# context above all - fails here and nowhere else.
+				st="$work/card.state"
+				digest5='^(instructions|screen):'
+
+				half="$(timeout 1800 "$rw" "$core" --frames 600 --rom "$rom" --game "$card" --run 0x101fd3d0 --state-out "$st" 2>&1 | grep -E '^state out:')"
+				rest="$(timeout 1800 "$rw" "$core" --frames 900 --rom "$rom" --game "$card" --state-in "$st" 2>&1 | grep -E "$digest5" | sort)"
+				whole="$(echo "$boxc" | grep -E "$digest5" | sort)"
+
+				if [ -z "$half" ]; then
+					echo "FAIL session (nothing was written)"; fail=$((fail + 1))
+				elif [ "$rest" != "$whole" ]; then
+					echo "FAIL session (a state loaded in another process runs differently)"
+					echo "$whole" > "$work/whole.txt"
+					echo "$rest" > "$work/rest.txt"
+					diff "$work/whole.txt" "$work/rest.txt" | head -20; fail=$((fail + 1))
+				else
+					echo "PASS session: 600 frames saved, another process ran the other 900 ($half)"
 					pass=$((pass + 1))
 				fi
 			fi
