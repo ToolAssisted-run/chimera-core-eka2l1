@@ -1,0 +1,218 @@
+diff --git a/src/emu/kernel/include/kernel/libmanager.h b/src/emu/kernel/include/kernel/libmanager.h
+index 903035251..cbf9d0bfa 100644
+--- a/src/emu/kernel/include/kernel/libmanager.h
++++ b/src/emu/kernel/include/kernel/libmanager.h
+@@ -114,6 +114,21 @@ namespace eka2l1 {
+             std::size_t info_index_;
+         };
+ 
++        /**
++         * \brief Serves the patch libraries from somewhere other than a folder.
++         *
++         * A host that has no directory to walk - one whose files are handed to
++         * it one by one, or one that carries the patch libraries inside its own
++         * binary - names the map files itself and answers for the bytes behind
++         * every name it gave.
++         */
++        struct patch_file_provider {
++            virtual ~patch_file_provider() = default;
++
++            virtual void list_map_files(std::vector<std::string> &names) = 0;
++            virtual bool read_patch_file(const std::string &name, std::vector<std::uint8_t> &data) = 0;
++        };
++
+         /**
+          * \brief Manage libraries and HLE functions.
+ 		 * 
+@@ -133,6 +148,7 @@ namespace eka2l1 {
+             bool log_svc{ false };
+ 
+             std::vector<patch_info> patches_;
++            patch_file_provider *patch_provider_ = nullptr;
+             std::vector<patch_pending_entry> patch_pendings_;
+             std::map<address, address> trampoline_lookup_;
+ 
+@@ -142,6 +158,7 @@ namespace eka2l1 {
+ 
+             std::uint32_t additional_mode_;
+ 
++            bool patch_library_exists(const std::string &name);
+             void apply_pending_patches();
+             void apply_trick_or_treat_algo();
+             void jump_trampoline_through_svc();
+@@ -185,6 +202,16 @@ namespace eka2l1 {
+             bool stage_rom_image_outside_core(common::ro_stream *stream, address code_address);
+ 
+             void load_patch_libraries(const std::string &patch_folder);
++
++            /**
++             * \brief Take the patch libraries from this provider instead of a folder.
++             *
++             * Must be set before the user side is initialised. Null restores the
++             * folder walk.
++             */
++            void set_patch_file_provider(patch_file_provider *provider) {
++                patch_provider_ = provider;
++            }
+             bool try_apply_patch(codeseg_ptr original);
+ 
+             system *get_sys();
+diff --git a/src/emu/kernel/src/libmanager.cpp b/src/emu/kernel/src/libmanager.cpp
+index e3b1f1496..080112cce 100644
+--- a/src/emu/kernel/src/libmanager.cpp
++++ b/src/emu/kernel/src/libmanager.cpp
+@@ -404,21 +404,46 @@ namespace eka2l1::hle {
+         return "";
+     }
+ 
++    bool lib_manager::patch_library_exists(const std::string &name) {
++        if (!patch_provider_) {
++            return common::exists(name);
++        }
++
++        std::vector<std::uint8_t> unused;
++        return patch_provider_->read_patch_file(name, unused);
++    }
++
+     void lib_manager::load_patch_libraries(const std::string &patch_folder) {
+-        auto iterator = common::make_directory_iterator(patch_folder, "*.map");
+-        if (!iterator) {
+-            return;
++        // The map files name the patches. They come from the folder, or, for a
++        // host that has no folders to walk, from the provider it gave us.
++        std::vector<std::string> map_names;
++
++        if (patch_provider_) {
++            patch_provider_->list_map_files(map_names);
++        } else {
++            auto iterator = common::make_directory_iterator(patch_folder, "*.map");
++            if (!iterator) {
++                return;
++            }
++
++            common::dir_entry entry;
++
++            while (iterator->next_entry(entry) == 0) {
++                map_names.push_back(entry.name);
++            }
+         }
+ 
+-        common::dir_entry entry;
++        if (map_names.empty()) {
++            return;
++        }
+ 
+         patches_.clear();
+ 
+         std::vector<std::string> patch_image_paths;
+ 
+-        while (iterator->next_entry(entry) == 0) {
+-            const std::string original_map_name = eka2l1::replace_extension(eka2l1::filename(entry.name), "");
+-            const std::string patch_map_path = eka2l1::add_path(patch_folder, entry.name);
++        for (const std::string &entry_name : map_names) {
++            const std::string original_map_name = eka2l1::replace_extension(eka2l1::filename(entry_name), "");
++            const std::string patch_map_path = patch_provider_ ? entry_name : eka2l1::add_path(patch_folder, entry_name);
+ 
+             epocver start_ver = kern_->get_epoc_version();
+ 
+@@ -427,7 +452,19 @@ namespace eka2l1::hle {
+             // Look for map file. These describes the export maps.
+             // This function will replace original ROM subroutines with route to these functions.
+             common::ini_file map_file_parser;
+-            map_file_parser.load(patch_map_path.c_str());
++
++            if (patch_provider_) {
++                std::vector<std::uint8_t> map_data;
++
++                if (!patch_provider_->read_patch_file(patch_map_path, map_data)) {
++                    LOG_ERROR(KERNEL, "Patch map {} was named but cannot be read", patch_map_path);
++                    continue;
++                }
++
++                map_file_parser.load_from_memory(std::string(map_data.begin(), map_data.end()));
++            } else {
++                map_file_parser.load(patch_map_path.c_str());
++            }
+ 
+             std::string source_dll_name_from_patch = eka2l1::replace_extension(original_map_name, "_");
+             common::ini_node_ptr pair_source_node = map_file_parser.find("source");
+@@ -451,9 +488,9 @@ namespace eka2l1::hle {
+                 }
+ 
+                 const std::string source_dll_name = source_dll_name_from_patch + epocver_to_plat_suffix(start_ver) + ".dll";
+-                patch_dll_map = eka2l1::add_path(patch_folder, source_dll_name);
++                patch_dll_map = patch_provider_ ? source_dll_name : eka2l1::add_path(patch_folder, source_dll_name);
+ 
+-                if (!common::exists(patch_dll_map)) {
++                if (!patch_library_exists(patch_dll_map)) {
+                     patch_dll_map.clear();
+                     start_ver++;
+ 
+@@ -466,9 +503,9 @@ namespace eka2l1::hle {
+ 
+             if (patch_dll_map.empty()) {
+                 const std::string source_dll_name = source_dll_name_from_patch + "general.dll";
+-                patch_dll_map = eka2l1::add_path(patch_folder, source_dll_name);
++                patch_dll_map = patch_provider_ ? source_dll_name : eka2l1::add_path(patch_folder, source_dll_name);
+ 
+-                if (!common::exists(patch_dll_map)) {
++                if (!patch_library_exists(patch_dll_map)) {
+                     LOG_ERROR(KERNEL, "Can't find suitable patch DLL for map {}", original_map_name);
+                     continue;
+                 }
+@@ -503,7 +540,7 @@ namespace eka2l1::hle {
+                     the_patch.need_dest_rom_ = false;
+                 }
+             } else {
+-                LOG_TRACE(KERNEL, "Patch {} has no hard requirements", entry.name);
++                LOG_TRACE(KERNEL, "Patch {} has no hard requirements", entry_name);
+             }
+ 
+             // Patch out the shared segment first
+@@ -512,7 +549,7 @@ namespace eka2l1::hle {
+             if (shared_section) {
+                 get_route_from_ini_section(*shared_section, the_patch.routes_);
+             } else {
+-                LOG_TRACE(KERNEL, "Shared section not found for patch DLL {}", entry.name);
++                LOG_TRACE(KERNEL, "Shared section not found for patch DLL {}", entry_name);
+             }
+ 
+             const char *alone_section_name = epocver_to_string(kern_->get_epoc_version());
+@@ -524,7 +561,7 @@ namespace eka2l1::hle {
+                     get_route_from_ini_section(*indi_section, the_patch.routes_);
+                 } else {
+                     LOG_TRACE(KERNEL, "Seperate section not found for epoc version {} of patch DLL {}", static_cast<int>(kern_->get_epoc_version()),
+-                        entry.name);
++                        entry_name);
+                 }
+             }
+ 
+@@ -544,11 +581,24 @@ namespace eka2l1::hle {
+                 patch_seg = lookup_result->second;
+             } else {
+                 // We want to patch ROM image though. Do it.
+-                auto e32imgfile = eka2l1::physical_file_proxy(patch_image_paths[i], READ_MODE | BIN_MODE);
+-                eka2l1::ro_file_stream image_data_stream(e32imgfile.get());
++                std::optional<loader::e32img> e32img;
+ 
+-                // Try to load them to ROM section
+-                auto e32img = loader::parse_e32img(reinterpret_cast<common::ro_stream *>(&image_data_stream));
++                if (patch_provider_) {
++                    std::vector<std::uint8_t> dll_data;
++
++                    if (!patch_provider_->read_patch_file(patch_image_paths[i], dll_data)) {
++                        continue;
++                    }
++
++                    common::ro_buf_stream image_data_stream(dll_data.data(), dll_data.size());
++                    e32img = loader::parse_e32img(reinterpret_cast<common::ro_stream *>(&image_data_stream));
++                } else {
++                    auto e32imgfile = eka2l1::physical_file_proxy(patch_image_paths[i], READ_MODE | BIN_MODE);
++                    eka2l1::ro_file_stream image_data_stream(e32imgfile.get());
++
++                    // Try to load them to ROM section
++                    e32img = loader::parse_e32img(reinterpret_cast<common::ro_stream *>(&image_data_stream));
++                }
+ 
+                 if (!e32img) {
+                     // Ignore.

@@ -1,0 +1,88 @@
+diff --git a/src/emu/drivers/include/drivers/graphics/shader.h b/src/emu/drivers/include/drivers/graphics/shader.h
+index c3465e4d8..e9da60657 100644
+--- a/src/emu/drivers/include/drivers/graphics/shader.h
++++ b/src/emu/drivers/include/drivers/graphics/shader.h
+@@ -23,11 +23,27 @@
+ #include <drivers/graphics/common.h>
+ 
+ #include <cstdint>
++#include <functional>
+ #include <memory>
+ #include <optional>
+ #include <string>
+ 
+ namespace eka2l1::drivers {
++    /**
++     * \brief Answers for a resource file the driver would otherwise open.
++     *
++     * The shader sources live beside the executable. An embedder that has no
++     * folder to put them in - a core in a sandbox, a single binary meant to be
++     * copied about on its own - carries them itself and answers here. Return
++     * false to let the driver open the path as usual.
++     *
++     * Install before the graphics driver is created.
++     */
++    using resource_provider = std::function<bool(const std::string &path, std::string &contents)>;
++
++    void set_resource_provider(resource_provider provider);
++    bool read_driver_resource(const std::string &path, std::string &contents);
++
+     class graphics_driver;
+ 
+     enum class shader_var_type {
+diff --git a/src/emu/drivers/src/graphics/backend/ogl/shader_ogl.cpp b/src/emu/drivers/src/graphics/backend/ogl/shader_ogl.cpp
+index 118c1d4a8..38676f531 100644
+--- a/src/emu/drivers/src/graphics/backend/ogl/shader_ogl.cpp
++++ b/src/emu/drivers/src/graphics/backend/ogl/shader_ogl.cpp
+@@ -183,15 +183,19 @@ namespace eka2l1::drivers {
+ 
+     ogl_shader_module::ogl_shader_module(const std::string &path, const shader_module_type type, const std::string &extra_header)
+         : shader(0) {
+-        common::ro_std_file_stream stream(path, std::ios_base::binary);
+-        if (!stream.valid()) {
+-            LOG_ERROR(DRIVER_GRAPHICS, "Shader file stream with path {} is invalid!", path);
+-        }
+-        
+         std::string whole_code;
+-        whole_code.resize(stream.size());
+ 
+-        stream.read(whole_code.data(), whole_code.size());
++        // An embedder that carries the shaders itself answers for them here.
++        if (!read_driver_resource(path, whole_code)) {
++            common::ro_std_file_stream stream(path, std::ios_base::binary);
++            if (!stream.valid()) {
++                LOG_ERROR(DRIVER_GRAPHICS, "Shader file stream with path {} is invalid!", path);
++            }
++
++            whole_code.resize(stream.size());
++            stream.read(whole_code.data(), whole_code.size());
++        }
++
+         whole_code.insert(whole_code.begin(), extra_header.begin(), extra_header.end());
+ 
+         create(nullptr, whole_code.data(), whole_code.size(), type);
+diff --git a/src/emu/drivers/src/graphics/shader.cpp b/src/emu/drivers/src/graphics/shader.cpp
+index a8ac278cb..80fc8f197 100644
+--- a/src/emu/drivers/src/graphics/shader.cpp
++++ b/src/emu/drivers/src/graphics/shader.cpp
+@@ -25,6 +25,20 @@
+ #include <cstring>
+ 
+ namespace eka2l1::drivers {
++    static resource_provider RESOURCE_PROVIDER;
++
++    void set_resource_provider(resource_provider provider) {
++        RESOURCE_PROVIDER = provider;
++    }
++
++    bool read_driver_resource(const std::string &path, std::string &contents) {
++        if (!RESOURCE_PROVIDER) {
++            return false;
++        }
++
++        return RESOURCE_PROVIDER(path, contents);
++    }
++
+     std::unique_ptr<shader_module> make_shader_module(graphics_driver *driver) {
+         switch (driver->get_current_api()) {
+         case graphic_api::opengl: {

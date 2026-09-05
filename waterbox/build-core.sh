@@ -49,7 +49,7 @@ g++ -specs "$sr/lib/musl-gcc.specs" -mcmodel=large -fno-pic -fno-pie \
 	-Wl,-u,pthread_mutexattr_init -Wl,-u,pthread_mutexattr_settype -Wl,-u,pthread_mutexattr_destroy \
 	-o "$out/core.wbx" \
 	"$here"/obj-guest/wbx-entry.o "$here"/obj-guest/machine.o "$here"/obj-guest/vclock.o "$here"/obj-guest/memfs.o "$here"/obj-guest/gl-context.o "$here"/obj-guest/input.o "$here"/obj-guest/audio.o \
-	"$here"/obj-guest/host-ui.o "$here"/obj-guest/guest-syscalls.o \
+	"$here"/obj-guest/host-ui.o "$here"/obj-guest/guest-syscalls.o "$here"/obj-guest/generated-embedded-files.o \
 	"$mbuild/source/guest/cxxglue.c.o" "$mbuild/source/guest/emulibc.c.o" \
 	-Wl,--start-group $libs -Wl,--end-group \
 	-L"$sr/lib" -lstdc++ -lgcc -lgcc_eh -lc

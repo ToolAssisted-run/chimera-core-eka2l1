@@ -30,12 +30,21 @@ EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/
 
 CXXFLAGS := $(WBFLAGS) $(MBINCS) $(EKAINCS) -I. $(CXXINCS)
 
-OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/host-ui.o $(O)/guest-syscalls.o
+OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/host-ui.o $(O)/guest-syscalls.o $(O)/generated-embedded-files.o
 
 all: $(OBJS)
 
 $(O)/%.o: %.cpp
 	@mkdir -p $(O)
+	g++ $(SPECS) $(CXXFLAGS) -c -o $@ $<
+
+# The files the emulator would have opened beside itself. There is no beside
+# in the sandbox, so they are compiled in.
+$(O)/generated-embedded-files.cpp: gen-embedded-files.py
+	@mkdir -p $(O)
+	python3 gen-embedded-files.py $(EKA)/patch $(EKA)/emu/drivers/resources/gl $@
+
+$(O)/generated-embedded-files.o: $(O)/generated-embedded-files.cpp
 	g++ $(SPECS) $(CXXFLAGS) -c -o $@ $<
 
 clean:

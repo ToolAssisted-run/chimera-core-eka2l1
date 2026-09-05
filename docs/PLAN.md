@@ -164,8 +164,10 @@ networking, no real audio or input devices.
   and the device boots inside the sandbox from its ROM and a fifty-seven byte
   descriptor: 58 applications found, the machine's own menu launched, and native ==
   sandbox to the instruction (682,640 of them).
-- **M4 - the picture. STARTED 2026-09-05**: the context, the inline driver and the
-  readback all work; what the machine composes is still blank. See above.
+- **M4 - the picture. DONE 2026-09-05.** Red Faction draws its title screen and its
+  menu, and the sandbox draws them pixel for pixel identically to the native
+  reference with no OpenGL anywhere. Three things were missing, and only the last
+  was about drawing at all - see "What the picture needed" below.
 - **M4 (was) - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
@@ -298,25 +300,52 @@ makes its 176x208 screen, the screen is composed on demand
 (`scan_for_redraw(..., force)`) and read back through the command list, and two
 runs give the same digest.
 
-**What is missing is the picture, and it is not the plumbing.** The screen reads
-back all zeroes. Walking the window tree at the moment of the read says why: the
-compositor has 15 windows, 12 of them client canvases, and exactly ONE of them
-passes `can_be_physically_seen()` - visible, with a non-empty visible region - and
-that one has nothing recorded to draw. The compositor clears to transparent black
-and finds nothing to put on top, which is exactly the all-zero screen.
+## What the picture needed (M4, 2026-09-05)
 
-Every system application of this ROM behaves the same way, including ones that run
-millions of instructions first (Help runs 13 million). The window server rejects a
-`set_clipping_region` because "Region object's header data size is not 4 bytes" -
+The plumbing above was right from the start. Three other things were missing, and
+finding them took the machine apart in this order.
+
+**1. The emulator expects files beside itself, and a sandbox has no beside.**
+EKA2L1 opens two sets of files by path at runtime: the shaders its graphics driver
+draws with (`resources/*.vert`, `*.frag`), and the patch libraries it uses to
+replace ROM routines with its own (`patch/*.map` and the DLLs beside them). Both
+were simply absent. The shaders failing is silent in the worst way - the driver
+logs a compile error nobody reads, every draw becomes a no-op, and the screen is a
+clean, stable, reproducible black. Patches 0023 and 0024 let both come from memory
+instead of a folder, and `waterbox/gen-embedded-files.py` compiles them into the
+core: 260 KB of patch libraries and 8 KB of shaders, read in a fixed order so every
+build gets the same bytes.
+
+**2. The screen driver is one of those patch libraries.** A Symbian game draws
+through `CFbsDrawDevice`, from SCDV.DLL. EKA2L1 replaces it (the map file has an
+`[epoc6]` section, so it covers this Symbian 6.1 device; the DLL that serves it is
+`scdv_v81a.dll`, found by the version-walk fallback) with an implementation whose
+`Update()` tells the emulator a frame is ready. Without it the game drew into the
+framebuffer and nothing ever looked. With it, the emulator uploads the framebuffer
+and 704 frames arrive in fifty seconds of emulated time.
+
+**3. The picture is machine memory, so no OpenGL is needed to read it.** A direct
+screen access game writes into the panel's own buffer - a chunk in the machine's
+address space. `machine::read_screen` now reads that buffer and converts it (12,
+16, 24 and 32 bit panels) rather than composing the window tree and reading the
+GPU. It costs nothing, it works in the sandbox where there is no GL at all, and it
+makes the sandbox picture identical to the native reference's by construction
+rather than by luck. The compositor path stays for everything that is not drawing
+directly, and `screen::dsa_active_count()` (patch 0025) says which case this is.
+
+Red Faction now draws its N-Gage splash, its title screen and its menu, and the
+gate compares the picture in both flavors: `screen: 176x208 digest
+7326d676ffda67e5 lit 34916`, the same on both sides.
+
+**What still does not draw is this ROM's own UI shell.** The window server rejects
+a `set_clipping_region` because "Region object's header data size is not 4 bytes" -
 an EKA1 command shape its parser does not accept - the AVKON capability server
 answers an unimplemented opcode with a fake success, and the menu application stops
-at an unimplemented application-list opcode. The S60v1 user-interface framework
-does not come up far enough for its applications to paint.
-
-That is upstream compatibility with this particular ROM's UI shell, not anything
-the core brings, and the machine it matters for is a **game**: an N-Gage title
-creates its own window and draws into it directly rather than through AVKON.
-Proving the picture therefore waits on a game to run - see the open questions.
+at an unimplemented application-list opcode. Individual ROM applications do paint
+(the telephone application composes 4,444 lit pixels, the one the gate runs 36,608),
+but the S60v1 shell does not come up far enough to be a phone. That is upstream
+compatibility with this particular ROM, not anything the core brings, and the
+machine it matters for is the game.
 
 ## A package installs into the machine (2026-09-05)
 
@@ -379,10 +408,11 @@ matters is only that it opens. With it, no thread dies: the machine keeps
 so the game has set up direct screen access. `lcd` deliberately did NOT get one - a
 screen device that answers nothing would be a lie about the screen.
 
-The game still does not draw: every thread ends up waiting on a fast semaphore. The
-next thing to try is a real `lcd` channel, one that hands the game the screen buffer
-chunk the emulator already creates (`ScreenBuffer0`, whose address the display HAL
-already reports as `video_address_`).
+Neither of those was what stopped the picture, as it turned out - see "What the
+picture needed". The game never issues a single operation on the `Lcd.LDD` channel
+it opens, and registering a null device for `lcd` changes its instruction count by
+nothing at all: it opens the driver out of habit and draws through the screen
+driver library instead. `lcd` deliberately still has no device.
 
 **The core was perturbing its own machine.** Chasing the divergence this opened up
 found it: the guest registered a kernel timer every millisecond, left over from the
@@ -391,8 +421,8 @@ second that the native reference did not. It is the host's to ask for now
 (`SetTimerCheckUs`), which is what the gate does, and the two flavors agree again -
 74,720,168 instructions each.
 
-`.blz` remains out of reach: it needs a third-party installer app (BLZinstapp) run
-inside the machine, which needs the picture.
+`.blz` needs a third-party installer app (BLZinstapp) run inside the machine, which
+now has a picture to run it by.
 
 ## Open questions
 

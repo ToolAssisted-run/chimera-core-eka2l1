@@ -3,12 +3,14 @@
 #include "gl-context.h"
 #include "input.h"
 #include "host-ui.h"
+#include "embedded-files.h"
 
 #include <common/archive.h>
 #include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
 #include <drivers/graphics/graphics.h>
+#include <drivers/graphics/shader.h>
 #include <drivers/input/common.h>
 #include <drivers/itc.h>
 #include <kernel/kernel.h>
@@ -22,10 +24,59 @@
 #include <system/devices.h>
 #include <system/software.h>
 #include <system/epoc.h>
+#include <kernel/libmanager.h>
 
 #include <algorithm>
 
 namespace chimera {
+    // EKA2L1 replaces a handful of ROM routines with its own: the screen driver
+    // above all, which is the only thing that carries a direct screen access
+    // game's pixels from the framebuffer chunk to the compositor. Upstream
+    // finds those libraries by walking a folder. This machine has none, so it
+    // answers for them out of its own binary.
+    class embedded_patch_files : public eka2l1::hle::patch_file_provider {
+    public:
+        void list_map_files(std::vector<std::string> &names) override {
+            for (unsigned int i = 0; i < PATCH_BLOB_COUNT; i++) {
+                const std::string name = PATCH_BLOBS[i].name;
+
+                if (name.size() > 4 && name.compare(name.size() - 4, 4, ".map") == 0) {
+                    names.push_back(name);
+                }
+            }
+        }
+
+        bool read_patch_file(const std::string &name, std::vector<std::uint8_t> &data) override {
+            for (unsigned int i = 0; i < PATCH_BLOB_COUNT; i++) {
+                if (name == PATCH_BLOBS[i].name) {
+                    data.assign(PATCH_BLOBS[i].data, PATCH_BLOBS[i].data + PATCH_BLOBS[i].size);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    };
+
+    static embedded_patch_files PATCH_FILES;
+
+    // The graphics driver opens its shader sources by path. Same story: this
+    // machine carries them. A driver with no shaders draws nothing at all, and
+    // says so only in its log.
+    static bool read_embedded_shader(const std::string &path, std::string &contents) {
+        const std::size_t slash = path.find_last_of("/\\");
+        const std::string name = (slash == std::string::npos) ? path : path.substr(slash + 1);
+
+        for (unsigned int i = 0; i < SHADER_BLOB_COUNT; i++) {
+            if (name == SHADER_BLOBS[i].name) {
+                contents.assign(reinterpret_cast<const char *>(SHADER_BLOBS[i].data), SHADER_BLOBS[i].size);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     machine::machine(const machine_options &options)
         : options_(options)
         , clock_(options.epoch_us, options.instructions_per_second)
@@ -124,6 +175,7 @@ namespace chimera {
 
     void machine::start_graphics(void *(*loader)(const char *name)) {
         install_borrowed_gl(loader);
+        eka2l1::drivers::set_resource_provider(read_embedded_shader);
 
         eka2l1::drivers::window_system_info info;
         gdriver_ = eka2l1::drivers::create_graphics_driver(eka2l1::drivers::graphic_api::opengl, info);
@@ -188,11 +240,92 @@ namespace chimera {
         winserv->queue_input_from_driver(event);
     }
 
-    bool machine::read_screen(std::vector<std::uint32_t> &out, int &width, int &height) {
-        if (!gdriver_) {
+    // The panel's own memory, as a picture.
+    //
+    // A game drawing straight into the framebuffer has already written every
+    // pixel there, in whatever depth the panel reports. Reading it takes no
+    // graphics driver and no compositor: it is machine memory, so the picture
+    // is the same in every flavor and travels in the machine's savestates.
+    static bool read_framebuffer(eka2l1::epoc::screen *scr, std::vector<std::uint32_t> &out,
+        int &width, int &height) {
+        if (!scr->screen_buffer_chunk) {
             return false;
         }
 
+        const eka2l1::epoc::config::screen_mode &mode = scr->current_mode();
+
+        // A rotated panel is laid out to suit the rotation. Leave those to the
+        // compositor, which already knows how to turn them the right way up.
+        if ((mode.rotation != 0) || (mode.size.x <= 0) || (mode.size.y <= 0)) {
+            return false;
+        }
+
+        const std::uint32_t bpp = eka2l1::epoc::get_bpp_from_display_mode(scr->dsa_disp_mode);
+        const std::uint32_t pitch = scr->screen_buffer_byte_width(scr->dsa_disp_mode);
+        const std::uint8_t *base = scr->screen_buffer_ptr();
+
+        if (!base) {
+            return false;
+        }
+
+        width = mode.size.x;
+        height = mode.size.y;
+        out.resize(static_cast<std::size_t>(width) * height);
+
+        for (int y = 0; y < height; y++) {
+            const std::uint8_t *row = base + static_cast<std::size_t>(y) * pitch;
+
+            for (int x = 0; x < width; x++) {
+                std::uint32_t r = 0;
+                std::uint32_t g = 0;
+                std::uint32_t b = 0;
+
+                switch (bpp) {
+                case 12: {
+                    // 0x0RGB, one nibble each, spread over the full range.
+                    const std::uint16_t v = *reinterpret_cast<const std::uint16_t *>(row + x * 2);
+                    r = ((v >> 8) & 0xF) * 17;
+                    g = ((v >> 4) & 0xF) * 17;
+                    b = (v & 0xF) * 17;
+                    break;
+                }
+
+                case 16: {
+                    // 565.
+                    const std::uint16_t v = *reinterpret_cast<const std::uint16_t *>(row + x * 2);
+                    r = ((v >> 11) & 0x1F) * 255 / 31;
+                    g = ((v >> 5) & 0x3F) * 255 / 63;
+                    b = (v & 0x1F) * 255 / 31;
+                    break;
+                }
+
+                case 24:
+                    b = row[x * 3];
+                    g = row[x * 3 + 1];
+                    r = row[x * 3 + 2];
+                    break;
+
+                case 32: {
+                    const std::uint32_t v = *reinterpret_cast<const std::uint32_t *>(row + x * 4);
+                    r = (v >> 16) & 0xFF;
+                    g = (v >> 8) & 0xFF;
+                    b = v & 0xFF;
+                    break;
+                }
+
+                default:
+                    // Palette and grayscale panels: nothing this port has met.
+                    return false;
+                }
+
+                out[static_cast<std::size_t>(y) * width + x] = 0xFF000000u | (r << 16) | (g << 8) | b;
+            }
+        }
+
+        return true;
+    }
+
+    bool machine::read_screen(std::vector<std::uint32_t> &out, int &width, int &height) {
         eka2l1::kernel_system *kern = sys_->get_kernel_system();
 
         if (!kern) {
@@ -207,15 +340,32 @@ namespace chimera {
             return false;
         }
 
-        // Compose what the machine has drawn so far. Nothing else will ask:
-        // the window server redraws on its own schedule for a display that is
-        // watching, and here the only watcher is whoever called this.
+        eka2l1::epoc::screen *scr = winserv->get_screen(0);
+
+        if (!scr) {
+            return false;
+        }
+
+        // A direct screen access client wrote its picture into the panel
+        // itself. That memory is the machine's, so read it there: it needs no
+        // graphics driver, which is the only way a sandboxed core gets a
+        // picture at all.
+        if ((scr->dsa_active_count() > 0) && read_framebuffer(scr, out, width, height)) {
+            return true;
+        }
+
+        if (!gdriver_) {
+            return false;
+        }
+
+        // Otherwise the picture is the window tree, and somebody has to
+        // compose it. Nothing else will ask: the window server redraws on its
+        // own schedule for a display that is watching, and here the only
+        // watcher is whoever called this.
         winserv->get_anim_scheduler()->scan_for_redraw(gdriver_.get(), 0, true);
         gdriver_->pump();
 
-        eka2l1::epoc::screen *scr = winserv->get_screen(0);
-
-        if (!scr || !scr->screen_texture) {
+        if (!scr->screen_texture) {
             return false;
         }
 
@@ -372,6 +522,9 @@ namespace chimera {
         } else {
             mount_host_drives();
         }
+
+        // Before the user side comes up: initialising it is what loads them.
+        sys_->get_lib_manager()->set_patch_file_provider(&PATCH_FILES);
 
         sys_->initialize_user_parties();
 

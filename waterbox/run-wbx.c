@@ -127,6 +127,31 @@ int main(int argc, char **argv)
 
 	u64fn GetAppCount = (u64fn)proc(h, "GetAppCount");
 
+	/* The picture, in run-native's exact format. The machine draws it into
+	 * its own memory, so the sandbox has one without any OpenGL at all and
+	 * it must be the native reference's pixel for pixel. */
+	{
+		typedef uint32_t *(MB_GUEST_ABI *pixfn)(void);
+		pixfn GetVideoBgra = (pixfn)proc(h, "GetVideoBgra");
+		intfn GetVideoWidth = (intfn)proc(h, "GetVideoWidth");
+		intfn GetVideoHeight = (intfn)proc(h, "GetVideoHeight");
+
+		const int w = GetVideoWidth(), hgt = GetVideoHeight();
+		const uint32_t *pixels = GetVideoBgra();
+		uint64_t digest = 1469598103934665603ull;
+		size_t lit = 0;
+
+		for (long i = 0; i < (long)w * hgt; i++) {
+			digest ^= pixels[i];
+			digest *= 1099511628211ull;
+
+			if (pixels[i] & 0x00FFFFFF) lit++;
+		}
+
+		printf("screen: %dx%d digest %016llx lit %zu\n", w, hgt,
+			(unsigned long long)digest, lit);
+	}
+
 	intfn GetInstallResult = (intfn)proc(h, "GetInstallResult");
 
 	printf("device: %s\n", GetDeviceMounted() ? "mounted" : "none");

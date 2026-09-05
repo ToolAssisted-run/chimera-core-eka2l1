@@ -172,9 +172,8 @@ else
 		# The emulator's renderer runs on a context the harness made and never
 		# on one of its own, its command lists run on the stepping thread
 		# rather than on a thread of the driver's, and the screen is composed
-		# on demand and read back. What it draws is not yet a picture - see
-		# docs/PLAN.md - but the size, the digest and the path are the
-		# machine's, and they must be the same every time.
+		# on demand and read back. What it draws must be a picture, and the
+		# same picture every time.
 		gpu() {
 			rm -rf "$work/gpu"
 			cp -r "$work/romonly" "$work/gpu"
@@ -189,6 +188,8 @@ else
 			echo "SKIP gpu: no OpenGL context here"
 		elif ! echo "$one_gpu" | grep -q "^screen: "; then
 			echo "FAIL gpu (the machine composed no screen)"; echo "$one_gpu"; fail=$((fail + 1))
+		elif echo "$one_gpu" | grep -q "^screen: .* lit 0$"; then
+			echo "FAIL gpu (the composed screen is empty)"; echo "$one_gpu"; fail=$((fail + 1))
 		elif [ "$one_gpu" != "$two_gpu" ]; then
 			echo "FAIL gpu (two runs disagree)"
 			echo "--- first"; echo "$one_gpu"; echo "--- second"; echo "$two_gpu"; fail=$((fail + 1))
@@ -261,23 +262,29 @@ else
 			if [ -z "$card" ]; then
 				echo "SKIP card: no game in tests/roms-local (the game is the user's to supply)"
 			else
-				digest4='^(apps|run|instructions|drive entries|drive written):'
+				# The picture too. The game draws straight into the panel, which
+				# is the machine's own memory, so the sandbox has a picture with
+				# no OpenGL anywhere and it must be the reference's pixel for
+				# pixel.
+				digest4='^(apps|run|instructions|drive entries|drive written|screen):'
 
 				rm -rf "$work/card"
 				mkdir -p "$work/card"
 
-				natc="$(timeout 1800 "$rn" --data "$work/card" --rom-only "$rom" --frames 300 --card "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
-				boxc="$(timeout 1800 "$rw" "$core" --frames 300 --rom "$rom" --game "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
+				natc="$(timeout 1800 "$rn" --data "$work/card" --rom-only "$rom" --frames 1500 --card "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
+				boxc="$(timeout 1800 "$rw" "$core" --frames 1500 --rom "$rom" --game "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
 
 				if ! echo "$boxc" | grep -q "started"; then
 					echo "FAIL card (the game did not start in the sandbox)"; echo "$boxc"; fail=$((fail + 1))
+				elif echo "$boxc" | grep -q "^screen: .* lit 0$"; then
+					echo "FAIL card (the game drew nothing)"; echo "$boxc"; fail=$((fail + 1))
 				elif [ "$natc" != "$boxc" ]; then
 					echo "FAIL card (native vs sandbox)"
 					echo "$natc" > "$work/natc.txt"
 					echo "$boxc" > "$work/boxc.txt"
 					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
 				else
-					echo "PASS card: native == sandbox ($(echo "$boxc" | grep -E '^(apps|instructions):' | tr '\n' ' '))"
+					echo "PASS card: native == sandbox ($(echo "$boxc" | grep -E '^(instructions|screen):' | tr '\n' ' '))"
 					pass=$((pass + 1))
 				fi
 			fi

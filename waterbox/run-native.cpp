@@ -22,6 +22,10 @@ extern "C" void *chimera_egl_proc(const char *name);
 #include <kernel/thread.h>
 #include <kernel/timing.h>
 #include <services/applist/applist.h>
+#include <services/window/classes/winbase.h>
+#include <services/window/classes/winuser.h>
+#include <services/window/screen.h>
+#include <services/window/window.h>
 #include <common/path.h>
 #include <system/consts.h>
 #include <vfs/vfs.h>
@@ -442,11 +446,11 @@ int main(int argc, char **argv) {
             machine.render_audio(discarded.data(), discarded.size() / 2);
         }
 
-        // Compose every frame, the way a core does: a machine drawing through
+        // Read every frame, the way a core does: a machine drawing through
         // direct screen access waits for the screen to be put together, and a
         // composite that only happens when somebody reads is a composite the
         // machine never sees.
-        if (gpu) {
+        {
             std::vector<std::uint32_t> ignored;
             int ignored_width = 0;
             int ignored_height = 0;
@@ -459,10 +463,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (gpu) {
-        // What the machine drew. The digest is over the pixels the window
-        // server last composited, and the lit count is the shortest way to say
-        // whether anything reached the screen at all.
+    {
+        // What the machine drew. The digest is over the pixels it left on the
+        // panel, and the lit count is the shortest way to say whether anything
+        // reached the screen at all.
         std::vector<std::uint32_t> screen;
         int width = 0;
         int height = 0;
@@ -492,6 +496,40 @@ int main(int argc, char **argv) {
     }
 
     if (verbose) {
+        // Every window the compositor has, and whether it can be seen: a
+        // window with an empty visible region draws nothing and gives a game
+        // asking for direct screen access no area to draw into.
+        eka2l1::kernel_system *kern_for_win = machine.sys()->get_kernel_system();
+        eka2l1::window_server *winserv = kern_for_win ? reinterpret_cast<eka2l1::window_server *>(
+            kern_for_win->get_by_name<eka2l1::service::server>(
+                eka2l1::get_winserv_name_by_epocver(machine.sys()->get_symbian_version_use()))) : nullptr;
+
+        if (winserv && winserv->get_screen(0) && winserv->get_screen(0)->root) {
+            struct lister : public eka2l1::epoc::window_tree_walker {
+                bool do_it(eka2l1::epoc::window *win) override {
+                    if (win->type != eka2l1::epoc::window_kind::client) {
+                        return false;
+                    }
+
+                    eka2l1::epoc::canvas_base *canvas =
+                        reinterpret_cast<eka2l1::epoc::canvas_base *>(win);
+
+                    std::printf("window: %4d %-8s %s%s%s rect %dx%d+%d+%d regions %zu\n", win->id,
+                        canvas->is_visible() ? "visible" : "hidden",
+                        (canvas->flags & eka2l1::epoc::window::flags_active) ? "active " : "inert  ",
+                        (canvas->flags & eka2l1::epoc::window::flags_visible) ? "shown " : "unshown",
+                        (canvas->flags & eka2l1::epoc::window::flags_dsa) ? " dsa" : "",
+                        canvas->abs_rect.size.x, canvas->abs_rect.size.y,
+                        canvas->abs_rect.top.x, canvas->abs_rect.top.y,
+                        canvas->visible_region.rects_.size());
+
+                    return false;
+                }
+            } walker;
+
+            winserv->get_screen(0)->root->walk_tree_back_to_front(&walker);
+        }
+
         // Every thread the machine has and what it is doing. A machine that
         // has gone quiet is a machine where every thread is waiting, and this
         // says which ones and for what kind of thing.
@@ -510,8 +548,13 @@ int main(int argc, char **argv) {
 
             const int state = static_cast<int>(thread->current_state());
 
-            std::printf("thread: %-28s %s\n", thread->name().c_str(),
-                ((state >= 0) && (state < 14)) ? STATES[state] : "?");
+            // What it waits on, and how many requests it has outstanding: a
+            // thread in WaitForAnyRequest with a negative count is a thread
+            // owed a completion that never came.
+            std::printf("thread: %-28s %-16s requests %d on %s\n", thread->name().c_str(),
+                ((state >= 0) && (state < 14)) ? STATES[state] : "?",
+                thread->request_count(),
+                thread->wait_obj ? thread->wait_obj->name().c_str() : "-");
         }
     }
 

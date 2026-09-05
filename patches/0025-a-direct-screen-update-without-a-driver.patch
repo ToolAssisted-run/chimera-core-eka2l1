@@ -1,0 +1,46 @@
+diff --git a/src/emu/dispatch/src/screen.cpp b/src/emu/dispatch/src/screen.cpp
+index a44cb0d7b..f6dede7ad 100644
+--- a/src/emu/dispatch/src/screen.cpp
++++ b/src/emu/dispatch/src/screen.cpp
+@@ -253,6 +253,13 @@ namespace eka2l1::dispatch {
+                     kern->crr_thread()->sleep(static_cast<std::uint32_t>(next_vsync_us));
+                 }
+ 
++                // An embedder that asked for no pictures still gets the pacing:
++                // the guest waited for its vsync above. There is just nowhere to
++                // put the pixels.
++                if (!driver) {
++                    return;
++                }
++
+                 std::unique_lock<std::mutex> guard(scr->screen_mutex);
+ 
+                 if (dsa_depth_changed && scr->dsa_texture) {
+@@ -333,6 +340,7 @@ namespace eka2l1::dispatch {
+                 drivers::command_list retrieved = builder.retrieve_command_list();
+                 driver->submit_command_list(retrieved);
+ 
++
+                 if (((scr->flags_ & epoc::screen::FLAG_SCREEN_UPSCALE_FACTOR_LOCK) == 0) && scr->sync_screen_buffer) {    
+                     // The app/game updates normally, try to avoid upscaling it
+                     // Sometimes UI are mixed in, and these syncs need to sync UI's data too!
+diff --git a/src/emu/services/include/services/window/screen.h b/src/emu/services/include/services/window/screen.h
+index f58a31639..cf8b480d5 100644
+--- a/src/emu/services/include/services/window/screen.h
++++ b/src/emu/services/include/services/window/screen.h
+@@ -314,5 +314,15 @@ namespace eka2l1::epoc {
+ 
+         void ref_dsa_usage();
+         void deref_dsa_usage();
++
++        /**
++         * \brief How many clients are drawing straight into the framebuffer.
++         *
++         * Composing the window tree while one of them is would paint over the
++         * pixels it just wrote.
++         */
++        std::int32_t dsa_active_count() const {
++            return active_dsa_count_;
++        }
+     };
+ }
