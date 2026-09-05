@@ -2,7 +2,7 @@
  * miniBox host and reports what the machine did in run-native's exact format,
  * so the sandboxed build can be diffed against the native reference.
  *
- * usage: run-wbx <core.wbx> [--frames N] [--pack device.pack --rom SYM.ROM]
+ * usage: run-wbx <core.wbx> [--frames N] [--device device.info --rom SYM.ROM]
  *
  * Without a device the machine inside the box is the empty one and its
  * workload is a kernel timer every millisecond, which is what run-native
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
-		else if (!strcmp(argv[i], "--pack") && i + 1 < argc) pack = argv[++i];
+		else if (!strcmp(argv[i], "--device") && i + 1 < argc) pack = argv[++i];
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (argv[i][0] != '-' && !core) core = argv[i];
@@ -102,11 +102,11 @@ int main(int argc, char **argv)
 	/* The device, if there is one: the pack under the name the guest opens,
 	 * and the ROM under the name the emulator itself builds. */
 	if (pack) {
-		wbx_mount_file_path(h, "device.pack", pack, &r);
+		wbx_mount_file_path(h, "device.info", pack, &r);
 		if (r.error_message[0]) { fprintf(stderr, "mount pack: %s\n", r.error_message); return 1; }
 
 		char firm[64];
-		if (!pack_firmcode(pack, firm, sizeof firm)) { fprintf(stderr, "%s is not a device pack\n", pack); return 1; }
+		if (!pack_firmcode(pack, firm, sizeof firm)) { fprintf(stderr, "%s is not a device descriptor\n", pack); return 1; }
 
 		for (char *c = firm; *c; c++) *c = (char)tolower((unsigned char)*c);
 

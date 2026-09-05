@@ -37,7 +37,7 @@ namespace {
     // through mount_physical_path and nothing announces them. The application
     // list only scans a drive it has been told about.
     void announce_memory_drives(eka2l1::io_system *io) {
-        for (const drive_number drv : { drive_c, drive_d, drive_e, drive_z }) {
+        for (const drive_number drv : { drive_c, drive_d, drive_e }) {
             io->announce_drive(drv, eka2l1::drive_action_mount);
         }
     }
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     bool list_apps = false;
     std::string run_path;
     std::string probe_path;
-    std::string pack_path;
+    std::string device_info_path;
     bool print_rom_path = false;
     bool verbose = false;
 
@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
             options.host_clock = true;
         } else if ((std::strcmp(argv[i], "--probe") == 0) && has_value) {
             probe_path = argv[++i];
-        } else if ((std::strcmp(argv[i], "--pack") == 0) && has_value) {
-            pack_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--device") == 0) && has_value) {
+            device_info_path = argv[++i];
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
         } else if (std::strcmp(argv[i], "--print-rom-path") == 0) {
@@ -106,13 +106,13 @@ int main(int argc, char **argv) {
 
     // With a pack, the drives come from the machine's own memory - the same
     // filesystem the sandbox uses, exercised where it can be debugged.
-    options.in_memory_drives = !pack_path.empty();
+    options.in_memory_drives = !device_info_path.empty();
 
     chimera::machine machine(options);
 
     std::shared_ptr<chimera::memory_file_system> drives;
 
-    if (!pack_path.empty()) {
+    if (!device_info_path.empty()) {
         drives = std::make_shared<chimera::memory_file_system>();
     }
 
@@ -130,8 +130,8 @@ int main(int argc, char **argv) {
         eka2l1::file_system_inst as_instance = drives;
         machine.sys()->get_io_system()->add_filesystem(as_instance);
 
-        if (!drives->graft_pack(pack_path, drive_z, io_attrib_internal | io_attrib_write_protected)) {
-            std::fprintf(stderr, "%s is not a device pack\n", pack_path.c_str());
+        if (!drives->read_device_info(device_info_path)) {
+            std::fprintf(stderr, "%s is not a device descriptor\n", device_info_path.c_str());
             return 1;
         }
 
@@ -143,8 +143,7 @@ int main(int argc, char **argv) {
             drives->device_model(), drives->device_manufacturer(),
             static_cast<epocver>(drives->device_epocver()), drives->device_machine_uid());
 
-        std::printf("pack: %zu entries, device %s\n", drives->entry_count(),
-            drives->device_firmcode().c_str());
+        std::printf("descriptor: device %s\n", drives->device_firmcode().c_str());
     }
 
     const std::size_t devices = machine.device_count();
@@ -170,12 +169,6 @@ int main(int argc, char **argv) {
         std::printf("device 0: %s\n", set ? "set" : "refused");
 
         if (set) {
-            if (drives) {
-                // The ROM is loaded by now, and its own directory is what says
-                // where a file on drive Z lives in the machine's memory.
-                drives->set_rom(machine.sys()->get_rom_info());
-            }
-
             machine.boot();
 
             if (drives) {

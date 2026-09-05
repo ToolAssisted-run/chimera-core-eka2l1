@@ -81,7 +81,14 @@ namespace chimera {
     }
 
     void machine::boot() {
-        if (!options_.in_memory_drives) {
+        if (options_.in_memory_drives) {
+            // Drive Z is the ROM's, always: the ROM carries its own filesystem
+            // and the ROM filesystem is the only one that will take a volume of
+            // rom media. The writable drives are the caller's.
+            sys_->mount(drive_z, drive_media::rom,
+                eka2l1::add_path(options_.storage, "/drives/z/"),
+                io_attrib_internal | io_attrib_write_protected);
+        } else {
             mount_host_drives();
         }
 

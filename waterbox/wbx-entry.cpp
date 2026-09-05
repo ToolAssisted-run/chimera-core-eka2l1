@@ -53,9 +53,9 @@ namespace {
     std::shared_ptr<chimera::memory_file_system> g_drives;
     bool g_device = false;
 
-    // The pack the host mounts, if it mounted one. Everything the machine
-    // reads from drive Z comes out of this file as it reads it.
-    constexpr const char *PACK_NAME = "device.pack";
+    // The device descriptor the host mounts, if it mounted one: which device
+    // this is and which Symbian it runs. Drive Z itself comes from the ROM.
+    constexpr const char *DESCRIPTOR_NAME = "device.info";
 }
 
 extern "C" {
@@ -82,7 +82,7 @@ ECL_EXPORT int Init(void) {
     eka2l1::file_system_inst as_instance = g_drives;
     g_machine->sys()->get_io_system()->add_filesystem(as_instance);
 
-    if (g_drives->graft_pack(PACK_NAME, drive_z, io_attrib_internal | io_attrib_write_protected)) {
+    if (g_drives->read_device_info(DESCRIPTOR_NAME)) {
         // Writable drives for whatever the machine puts on them. They are
         // empty, they are the machine's, and they travel in its savestates.
         g_drives->mount_empty(drive_c, drive_media::physical, io_attrib_internal);
@@ -115,20 +115,16 @@ ECL_EXPORT int Init(void) {
 
         if (!g_machine->set_device(0)) {
             std::snprintf(g_loadError, sizeof g_loadError, "the device in %s was refused (rom %s)",
-                PACK_NAME, rom_path.c_str());
+                DESCRIPTOR_NAME, rom_path.c_str());
             return 0;
         }
-
-        // The ROM is loaded by now, and its own directory is what says where a
-        // file on drive Z lives in the machine's memory.
-        g_drives->set_rom(g_machine->sys()->get_rom_info());
 
         g_machine->boot();
 
         // The drives were mounted on a filesystem of their own, which nothing
         // else could have been told about. The application list only scans a
         // drive it has been told about.
-        for (const drive_number drv : { drive_c, drive_d, drive_e, drive_z }) {
+        for (const drive_number drv : { drive_c, drive_d, drive_e }) {
             g_machine->sys()->get_io_system()->announce_drive(drv, eka2l1::drive_action_mount);
         }
 

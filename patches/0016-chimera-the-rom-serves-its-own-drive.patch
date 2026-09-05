@@ -1,0 +1,296 @@
+diff --git a/src/emu/vfs/src/vfs.cpp b/src/emu/vfs/src/vfs.cpp
+index 1625a47c8..14156f458 100644
+--- a/src/emu/vfs/src/vfs.cpp
++++ b/src/emu/vfs/src/vfs.cpp
+@@ -1047,6 +1047,109 @@ namespace eka2l1 {
+         }
+     };
+ 
++    /* A directory read out of the ROM's own tree.
++     *
++     * The tree is what the ROM says its filesystem is, and it is complete: a
++     * device whose ROM is present needs nothing else on the host to enumerate
++     * drive Z. Entries come back in the order the ROM holds them, which is the
++     * order it was built in and is the same on every machine.
++     */
++    class rom_directory : public directory {
++        abstract_file_system *inst;
++        std::string vir_path;
++        std::string filter;
++        epoc::uid_type utype;
++
++        std::vector<std::string> names;
++        std::size_t at;
++
++        bool peeking;
++        std::optional<entry_info> peek_info;
++
++    public:
++        rom_directory(abstract_file_system *inst, loader::rom_dir *dir, const std::string &vir_path,
++            const std::string &filter, epoc::uid_type type, const std::uint32_t attrib)
++            : directory(attrib)
++            , inst(inst)
++            , vir_path(vir_path)
++            , filter(filter)
++            , utype(type)
++            , at(0)
++            , peeking(false) {
++            this->type = io_component_type::dir;
++
++            for (const auto &entry : dir->entries) {
++                names.push_back(common::ucs2_to_utf8(entry.name));
++            }
++        }
++
++        std::optional<entry_info> get_next_entry() override {
++            if (peeking) {
++                peeking = false;
++                return peek_info;
++            }
++
++            while (at < names.size()) {
++                const std::string name = names[at++];
++
++                if ((name == ".") || (name == "..")) {
++                    continue;
++                }
++
++                if (!common::full_wildcard_match<char>(common::lowercase_string(name),
++                        common::lowercase_string(filter), false)) {
++                    continue;
++                }
++
++                const std::string full = eka2l1::add_path(vir_path, name);
++                std::optional<entry_info> info = inst->get_entry_info(common::utf8_to_ucs2(full));
++
++                if (!info.has_value()) {
++                    continue;
++                }
++
++                if (attribute != io_attrib_none) {
++                    if (!(attribute & io_attrib_include_dir) && (info->type == io_component_type::dir)) {
++                        continue;
++                    }
++
++                    if (!(attribute & io_attrib_include_file) && (info->type == io_component_type::file)) {
++                        continue;
++                    }
++                }
++
++                if ((attribute & io_attrib_include_file) && (attribute & io_attrib_allow_uid)
++                    && (info->type == io_component_type::file)) {
++                    epoc::uid_type found;
++                    std::unique_ptr<file> handle = inst->open_file(common::utf8_to_ucs2(full), READ_MODE | BIN_MODE);
++
++                    if (!handle || (handle->read_file(&found, sizeof(found), 1) != sizeof(found))) {
++                        continue;
++                    }
++
++                    if (((utype.uid1 != 0) && (utype.uid1 != found.uid1))
++                        || ((utype.uid2 != 0) && (utype.uid2 != found.uid2))
++                        || ((utype.uid3 != 0) && (utype.uid3 != found.uid3))) {
++                        continue;
++                    }
++                }
++
++                return info;
++            }
++
++            return std::nullopt;
++        }
++
++        std::optional<entry_info> peek_next_entry() override {
++            if (!peeking) {
++                peek_info = get_next_entry();
++                peeking = true;
++            }
++
++            return peek_info;
++        }
++    };
++
+     class rom_file_system : public physical_file_system {
+         loader::rom *rom_cache;
+         memory_system *mem;
+@@ -1088,60 +1191,156 @@ namespace eka2l1 {
+             return do_mount(drv, media, attrib, physical_path);
+         }
+ 
+-        abstract_file_system_err_code is_entry_in_rom(const std::u16string &path) override {
+-            // Don't bother getting an entry if it's not even available on host
+-            if (!exists(path)) {
+-                return abstract_file_system_err_code::no;
++        // The ROM's tree walker cannot be asked about a path with nothing
++        // after the drive: its iterator runs off the end and throws. Nothing
++        // used to ask, because every lookup was gated on the host first.
++        static bool can_ask_rom(const std::string &path) {
++            const std::size_t at = path.find_first_of("\\/");
++            return (at != std::string::npos) && (at + 1 < path.length());
++        }
++
++        // The path the ROM knows an entry by. EKA2 moved two directories and
++        // the emulator rewrites the guest's path rather than the tree.
++        std::u16string rom_path_of(const std::u16string &path) const {
++            std::u16string rewritten = path;
++
++            if (static_cast<int>(ver) >= static_cast<int>(epocver::eka2)) {
++                if (common::compare_ignore_case(u"\\system\\libs", rewritten.substr(2, 12)) == 0) {
++                    rewritten.replace(2, 12, u"\\sys\\bin");
++                } else if (common::compare_ignore_case(u"\\system\\programs", rewritten.substr(2, 16)) == 0) {
++                    rewritten.replace(2, 16, u"\\sys\\bin");
++                }
+             }
+ 
+-            if (rom_cache->burn_tree_find_entry(common::ucs2_to_utf8(path))) {
++            return rewritten;
++        }
++
++        abstract_file_system_err_code is_entry_in_rom(const std::u16string &path) override {
++            const std::string rom_path = common::ucs2_to_utf8(rom_path_of(path));
++
++            if (can_ask_rom(rom_path) && rom_cache->burn_tree_find_entry(rom_path)) {
+                 return abstract_file_system_err_code::ok;
+             }
+ 
+             return abstract_file_system_err_code::no;
+         }
+ 
++        // The ROM carries its own filesystem, and it is complete. Asking the
++        // host first - which is what this used to do everywhere, "don't bother
++        // if it's not even available on host" - meant a device could only be
++        // used with a copy of its ROM's files unpacked beside it, and the copy
++        // answered where the ROM should have. The ROM is asked first now, and
++        // the host is what answers for the files the ROM does not have.
++        bool exists(const std::u16string &path) override {
++            std::string rom_path = common::ucs2_to_utf8(rom_path_of(path));
++
++            while (!rom_path.empty() && eka2l1::is_separator(rom_path.back())) {
++                rom_path.pop_back();
++            }
++
++            if (can_ask_rom(rom_path)
++                && (rom_cache->burn_tree_find_entry(rom_path) || rom_cache->burn_tree_find_dir(rom_path))) {
++                return true;
++            }
++
++            return physical_file_system::exists(path);
++        }
++
+         std::unique_ptr<file> open_file(const std::u16string &path, const int mode) override {
+             if (mode & WRITE_MODE) {
+                 LOG_ERROR(VFS, "Opening a read-only file (ROM + ROFS) with write mode");
+                 return nullptr;
+             }
+ 
+-            // Don't bother getting an entry if it's not even available on host
+-            if (!exists(path)) {
+-                return nullptr;
++            const std::u16string new_path = rom_path_of(path);
++            const std::string rom_path = common::ucs2_to_utf8(new_path);
++
++            std::optional<loader::rom_entry> entry;
++
++            if (can_ask_rom(rom_path)) {
++                entry = rom_cache->burn_tree_find_entry(rom_path);
+             }
+ 
+-            std::u16string new_path = path;
++            // The host copy is consulted only when the ROM has no entry, or
++            // when the caller asked for it and the two disagree about size.
++            if (!entry) {
++                return physical_file_system::open_file(new_path, mode);
++            }
+ 
+-            if (static_cast<int>(ver) >= static_cast<int>(epocver::eka2)) {
+-                if (common::compare_ignore_case(u"\\system\\libs", new_path.substr(2, 12)) == 0) {
+-                    new_path.replace(2, 12, u"\\sys\\bin");
+-                } else if (common::compare_ignore_case(u"\\system\\programs", new_path.substr(2, 16)) == 0) {
+-                    new_path.replace(2, 16, u"\\sys\\bin");
++            if (mode & PREFER_PHYSICAL) {
++                auto ff = physical_file_system::open_file(new_path, mode);
++
++                if (ff && (ff->size() != entry->size)) {
++                    return ff;
+                 }
+             }
+ 
+-            auto entry = rom_cache->burn_tree_find_entry(common::ucs2_to_utf8(new_path));
+-            auto ff = physical_file_system::open_file(new_path, mode);
++            return std::make_unique<rom_file>(mem, rom_cache, *entry, path);
++        }
++
++        std::unique_ptr<directory> open_directory(const std::u16string &path, epoc::uid_type type,
++            const std::uint32_t attrib) override {
++            std::u16string vir_path = rom_path_of(path);
++            std::string filter("*");
++
++            // The last component is a filter unless the path ends in a
++            // separator - the same rule the host-backed filesystem follows.
++            const std::size_t last = vir_path.find_last_of(u"\\/");
++
++            if ((last != std::u16string::npos) && (last != vir_path.length() - 1)) {
++                filter = common::ucs2_to_utf8(vir_path.substr(last + 1));
++                vir_path.erase(vir_path.begin() + last + 1, vir_path.end());
++            }
++
++            std::string lookup = common::ucs2_to_utf8(vir_path);
+ 
+-            // Dont change order!
+-            if (!entry || (ff && (mode & PREFER_PHYSICAL) && (ff->size() != entry->size))) {
+-                return ff;
++            while (!lookup.empty() && eka2l1::is_separator(lookup.back())) {
++                lookup.pop_back();
+             }
+ 
+-            return std::make_unique<rom_file>(mem, rom_cache, *entry, path);
++            loader::rom_dir *dir = can_ask_rom(lookup) ? rom_cache->burn_tree_find_dir(lookup) : nullptr;
++
++            if (dir) {
++                return std::make_unique<rom_directory>(this, dir, common::ucs2_to_utf8(vir_path),
++                    filter, type, attrib);
++            }
++
++            return physical_file_system::open_directory(path, type, attrib);
+         }
+ 
+         std::optional<entry_info> get_entry_info(const std::u16string &path) override {
+-            // Don't bother getting an entry if it's not even available on host
+-            if (!exists(path)) {
+-                return std::nullopt;
+-            }
++            const std::u16string rom_path = rom_path_of(path);
++            const std::string rom_path_utf8 = common::ucs2_to_utf8(rom_path);
++
++            std::optional<loader::rom_entry> entry;
+ 
+-            auto entry = rom_cache->burn_tree_find_entry(common::ucs2_to_utf8(path));
++            if (can_ask_rom(rom_path_utf8)) {
++                entry = rom_cache->burn_tree_find_entry(rom_path_utf8);
++            }
+ 
+             if (!entry) {
++                // A directory of the ROM's has no entry of its own at the top
++                // of the tree, so ask the tree for the directory itself before
++                // giving up on the ROM.
++                std::string lookup = rom_path_utf8;
++
++                while (!lookup.empty() && eka2l1::is_separator(lookup.back())) {
++                    lookup.pop_back();
++                }
++
++                if (can_ask_rom(lookup) && rom_cache->burn_tree_find_dir(lookup)) {
++                    entry_info dir_info;
++
++                    dir_info.type = io_component_type::dir;
++                    dir_info.size = 0;
++                    dir_info.name = eka2l1::filename(common::ucs2_to_utf8(path));
++                    dir_info.full_path = common::ucs2_to_utf8(path);
++                    dir_info.attribute = mappings[ascii_to_drive_number(static_cast<char>(std::towlower(
++                        common::ucs2_to_utf8(path)[0])))].first.attribute;
++
++                    return dir_info;
++                }
++
+                 return physical_file_system::get_entry_info(path);
+             }
+ 

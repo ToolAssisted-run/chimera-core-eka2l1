@@ -160,11 +160,10 @@ networking, no real audio or input devices.
   check-wbx, and it runs the same workload as the native reference to the microsecond.
   What the sandbox still lacks is a filesystem: the device dump cannot reach the machine
   inside the box yet, so what runs there is the empty machine. That is M3's first job.
-- **M3 - the device in the box. HALF DONE 2026-09-05.** The guest filesystem is
-  written and the device boots inside the sandbox: 58 applications found, the
-  machine's own menu launched, and native == sandbox to the instruction. The
-  remaining half is above: drive Z should come from the ROM rather than from a
-  pack beside it.
+- **M3 - the device in the box. DONE 2026-09-05.** The guest filesystem is written
+  and the device boots inside the sandbox from its ROM and a fifty-seven byte
+  descriptor: 58 applications found, the machine's own menu launched, and native ==
+  sandbox to the instruction (682,640 of them).
 - **M4 - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
@@ -242,18 +241,20 @@ Six patches and four findings came out of it:
   the loader picks between them by asking the file whether it is in ROM. Answer
   no and nothing on the machine ever starts.
 
-**What this does not do yet.** Upstream serves drive Z from the ROM image itself
-(`rom_file_system`), and the extracted copy exists only because every lookup in it
-is gated on the file existing on the host first (`open_file`, `get_entry_info` and
-`is_entry_in_rom` all begin with "don't bother if it's not even available on
-host"). A file served from the pack is therefore an ordinary file where upstream
-would hand back a ROM file with the ROM's own attributes and address. The machine
-boots, finds its 58 applications and runs the menu identically in both flavors -
-14,403 instructions - but the same menu on host directories reaches 681,873 before
-it settles, so something the ROM filesystem provides is still missing. Making the
-ROM authoritative - its own tree first, the host only as a fallback, and a
-directory iterator over that tree - would close the gap and delete the pack
-entirely, leaving the ROM as the single file the device needs.
+**The ROM serves its own drive (0016).** EKA2L1 already reads drive Z out of the
+ROM image, but every lookup began with "don't bother if it's not even available on
+host" - so a device could only be used with a copy of its ROM's files unpacked
+beside it, and the copy answered where the ROM should have. The ROM is asked first
+now, the host answers only for what the ROM does not have, and `rom_file_system`
+enumerates its own directories rather than borrowing the host's. Its tree walker
+throws on a path with nothing after the drive, which nothing used to reach because
+of that same gate, so the lookups are guarded.
+
+What crosses into the sandbox is therefore the ROM and a **fifty-seven byte
+descriptor** naming the device and its Symbian version - no unpacked drive Z at
+all. Drive Z is the ROM's; C, D and E are the machine's own memory. Native and
+sandbox run the machine's menu to the same 682,640 instructions, and the extracted
+copy no longer changes the answer on either side.
 
 ## Open questions
 

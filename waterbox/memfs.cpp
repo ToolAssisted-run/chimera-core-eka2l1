@@ -4,6 +4,7 @@
 #include <common/path.h>
 #include <common/wildcard.h>
 
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -127,20 +128,13 @@ namespace chimera {
 
     class memory_file : public eka2l1::file {
     public:
-        memory_file(memory_file_system *fs, memory_node *node, const std::u16string &name, const int mode,
-            const bool in_rom)
+        memory_file(memory_node *node, const std::u16string &name, const int mode)
             : eka2l1::file(0)
-            , fs_(fs)
             , node_(node)
             , name_(name)
             , mode_(mode)
-            , position_(0)
-            , in_rom_(in_rom) {
+            , position_(0) {
             type = eka2l1::io_component_type::file;
-
-            if (node_->in_pack) {
-                pack_ = std::fopen(fs_->pack_name().c_str(), "rb");
-            }
 
             if (mode_ & APPEND_MODE) {
                 position_ = size();
@@ -154,13 +148,6 @@ namespace chimera {
         std::size_t write_file(const void *data, std::uint32_t size, std::uint32_t count) override {
             if (!(mode_ & WRITE_MODE) && !(mode_ & APPEND_MODE)) {
                 return 0;
-            }
-
-            // A file the machine writes stops being the pack's and becomes its
-            // own: the bytes it had are copied in once, and everything after
-            // that is the machine's memory.
-            if (node_->in_pack) {
-                materialise();
             }
 
             const std::size_t total = static_cast<std::size_t>(size) * count;
@@ -189,19 +176,6 @@ namespace chimera {
                 return 0;
             }
 
-            if (node_->in_pack) {
-                if (!pack_) {
-                    return 0;
-                }
-
-                std::fseek(pack_, static_cast<long>(node_->pack_offset + position_), SEEK_SET);
-
-                const std::size_t got = std::fread(data, 1, static_cast<std::size_t>(want), pack_);
-                position_ += got;
-
-                return got;
-            }
-
             std::memcpy(data, node_->bytes.data() + position_, static_cast<std::size_t>(want));
             position_ += want;
 
@@ -217,7 +191,7 @@ namespace chimera {
         }
 
         std::uint64_t size() const override {
-            return node_->in_pack ? node_->pack_size : node_->bytes.size();
+            return node_->bytes.size();
         }
 
         std::uint64_t seek(std::int64_t offset, eka2l1::file_seek_mode where) override {
@@ -254,11 +228,6 @@ namespace chimera {
         }
 
         bool close() override {
-            if (pack_) {
-                std::fclose(pack_);
-                pack_ = nullptr;
-            }
-
             return true;
         }
 
@@ -267,22 +236,15 @@ namespace chimera {
         }
 
         bool is_in_rom() const override {
-            // What the drive says it is. The loader reads this to decide
-            // whether an executable is a ROM image or an E32 image, and every
-            // executable on a Symbian 6 device's Z drive is the former: answer
-            // no and nothing on the machine will ever start.
-            return in_rom_;
+            // Nothing here is: the ROM serves its own files.
+            return false;
         }
 
         address rom_address() const override {
-            return in_rom_ ? fs_->rom_address_of(eka2l1::common::ucs2_to_utf8(name_)) : 0;
+            return 0;
         }
 
         bool resize(const std::size_t new_size) override {
-            if (node_->in_pack) {
-                materialise();
-            }
-
             node_->bytes.resize(new_size);
             return true;
         }
@@ -298,25 +260,10 @@ namespace chimera {
         }
 
     private:
-        void materialise() {
-            std::vector<std::uint8_t> copy(static_cast<std::size_t>(node_->pack_size));
-
-            if (pack_ && node_->pack_size) {
-                std::fseek(pack_, static_cast<long>(node_->pack_offset), SEEK_SET);
-                std::fread(copy.data(), 1, copy.size(), pack_);
-            }
-
-            node_->bytes = std::move(copy);
-            node_->in_pack = false;
-        }
-
-        memory_file_system *fs_;
         memory_node *node_;
         std::u16string name_;
         int mode_;
         std::uint64_t position_;
-        bool in_rom_;
-        std::FILE *pack_ = nullptr;
     };
 
     // ---- one directory -----------------------------------------------------
@@ -534,9 +481,8 @@ namespace chimera {
         return true;
     }
 
-    bool memory_file_system::graft_pack(const std::string &pack_name, const drive_number drv,
-        const std::uint32_t attrib) {
-        std::FILE *f = std::fopen(pack_name.c_str(), "rb");
+    bool memory_file_system::read_device_info(const std::string &name) {
+        std::FILE *f = std::fopen(name.c_str(), "rb");
 
         if (!f) {
             return false;
@@ -567,78 +513,17 @@ namespace chimera {
             return length ? (std::fread(out.data(), 1, length, f) == length) : true;
         };
 
-        if (!read_pod(f, epocver) || !read_pod(f, machine_uid) || !read_string(firmcode_)
-            || !read_string(model_) || !read_string(manufacturer_)) {
-            std::fclose(f);
+        const bool ok = read_pod(f, epocver) && read_pod(f, machine_uid) && read_string(firmcode_)
+            && read_string(model_) && read_string(manufacturer_);
+
+        std::fclose(f);
+
+        if (!ok) {
             return false;
         }
 
         epocver_ = epocver;
         machine_uid_ = machine_uid;
-
-        if (!mount_empty(drv, drive_media::rom, attrib)) {
-            std::fclose(f);
-            return false;
-        }
-
-        memory_node &root = roots_[static_cast<int>(drv)];
-
-        for (std::uint32_t i = 0; i < entries; i++) {
-            std::uint16_t path_length = 0;
-
-            if (!read_pod(f, path_length)) {
-                std::fclose(f);
-                return false;
-            }
-
-            std::string path(path_length, '\0');
-
-            if (path_length && (std::fread(path.data(), 1, path_length, f) != path_length)) {
-                std::fclose(f);
-                return false;
-            }
-
-            std::uint8_t is_dir = 0;
-            std::uint64_t offset = 0;
-            std::uint64_t size = 0;
-
-            if (!read_pod(f, is_dir) || !read_pod(f, offset) || !read_pod(f, size)) {
-                std::fclose(f);
-                return false;
-            }
-
-            char letter = '\0';
-            std::vector<std::string> parts;
-            split_path(path, letter, parts);
-
-            memory_node *at = &root;
-
-            for (std::size_t part = 0; part < parts.size(); part++) {
-                const bool last = (part + 1 == parts.size());
-                memory_node &child = at->children[lowered(parts[part])];
-
-                if (child.name.empty()) {
-                    child.name = parts[part];
-                }
-
-                if (last) {
-                    child.is_dir = (is_dir != 0);
-
-                    if (!child.is_dir) {
-                        child.in_pack = true;
-                        child.pack_offset = offset;
-                        child.pack_size = size;
-                    }
-                } else {
-                    child.is_dir = true;
-                }
-
-                at = &child;
-            }
-        }
-
-        std::fclose(f);
-        pack_name_ = pack_name;
 
         return true;
     }
@@ -772,11 +657,9 @@ namespace chimera {
 
         if ((mode & WRITE_MODE) && !(mode & APPEND_MODE)) {
             node->bytes.clear();
-            node->in_pack = false;
         }
 
-        return std::make_unique<memory_file>(this, node, path, mode,
-            mappings_[drv].first.media_type == drive_media::rom);
+        return std::make_unique<memory_file>(node, path, mode);
     }
 
     std::unique_ptr<eka2l1::directory> memory_file_system::open_directory(const std::u16string &path,
@@ -813,7 +696,7 @@ namespace chimera {
         eka2l1::entry_info info;
 
         info.type = node->is_dir ? eka2l1::io_component_type::dir : eka2l1::io_component_type::file;
-        info.size = node->is_dir ? 0 : static_cast<std::size_t>(node->in_pack ? node->pack_size : node->bytes.size());
+        info.size = node->is_dir ? 0 : node->bytes.size();
         info.full_path = utf8;
         info.name = eka2l1::filename(utf8);
         info.last_write = 0;
@@ -910,16 +793,6 @@ namespace chimera {
         // A path on the host is exactly what these files do not have.
         (void)path;
         return std::nullopt;
-    }
-
-    address memory_file_system::rom_address_of(const std::string &path) const {
-        if (!rom_) {
-            return 0xFFFFFFFF;
-        }
-
-        std::optional<eka2l1::loader::rom_entry> entry = rom_->burn_tree_find_entry(path);
-
-        return entry.has_value() ? entry->address_lin : 0xFFFFFFFF;
     }
 
     void memory_file_system::set_epoc_ver(const epocver ver) {

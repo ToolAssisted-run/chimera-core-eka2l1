@@ -8,14 +8,11 @@
 // files - so the drives are served from here instead, through EKA2L1's own
 // pluggable filesystem interface rather than by pretending to be a host.
 //
-// Two kinds of file live in the tree. One is bytes the machine wrote, which
-// are the machine's state and belong in its memory and its savestates. The
-// other is a slice of a device pack the host mounted, read as the machine
-// reads it: 36 megabytes of ROM files that never change are not the machine's
-// state, and copying them into the arena would put them in every savestate for
-// nothing.
+// Everything in it is bytes the machine wrote, which are the machine's state
+// and belong in its memory and its savestates. Drive Z is not here: the ROM
+// carries its own filesystem and serves it, so the drives this holds are the
+// writable ones.
 #include <common/types.h>
-#include <loader/rom.h>
 #include <vfs/vfs.h>
 
 #include <cstdint>
@@ -34,10 +31,6 @@ namespace chimera {
         std::map<std::string, memory_node> children;
 
         std::vector<std::uint8_t> bytes;
-
-        bool in_pack = false;
-        std::uint64_t pack_offset = 0;
-        std::uint64_t pack_size = 0;
     };
 
     class memory_file_system : public eka2l1::abstract_file_system {
@@ -45,39 +38,26 @@ namespace chimera {
         memory_file_system();
         ~memory_file_system();
 
-        // Reads the index of a device pack the host mounted under `pack_name`
-        // and grafts its tree onto `drv`, which is mounted read-only. The
-        // contents stay in the pack; only the index is held here.
-        bool graft_pack(const std::string &pack_name, const drive_number drv,
-            const std::uint32_t attrib);
-
-        // The ROM this device booted from. Files served from the pack are
-        // copies of the ROM's own, so the machine can ask where one lives in
-        // its address space and be told the truth - which it does: a Symbian
-        // application opens a resource file "in raw mode" and then reads it
-        // straight out of ROM rather than through the file server.
-        void set_rom(eka2l1::loader::rom *rom) { rom_ = rom; }
-
-        address rom_address_of(const std::string &path) const;
+        // Reads the device descriptor the host mounted under `name`: which
+        // device this is, which Symbian it runs, and what its machine uid is.
+        // The descriptor is all the machine needs beside its ROM.
+        bool read_device_info(const std::string &name);
 
         // Mounts an empty writable drive.
         bool mount_empty(const drive_number drv, const drive_media media,
             const std::uint32_t attrib);
 
-        // What the pack said about the device it came from. Empty until a pack
-        // is grafted.
+        // What the descriptor said. Empty until one is read.
         const std::string &device_firmcode() const { return firmcode_; }
         const std::string &device_model() const { return model_; }
         const std::string &device_manufacturer() const { return manufacturer_; }
         std::uint32_t device_epocver() const { return epocver_; }
         std::uint32_t device_machine_uid() const { return machine_uid_; }
 
-        // Diagnostics: how many entries the tree holds, and how many bytes of
-        // it are the machine's own rather than the pack's.
+        // Diagnostics: how many entries the tree holds, and how many bytes the
+        // machine has written into it.
         std::size_t entry_count() const;
         std::size_t written_bytes() const;
-
-        const std::string &pack_name() const { return pack_name_; }
 
         bool exists(const std::u16string &path) override;
         bool replace(const std::u16string &old_path, const std::u16string &new_path) override;
@@ -107,8 +87,6 @@ namespace chimera {
         std::array<memory_node, drive_z + 1> roots_;
         std::array<std::pair<eka2l1::drive, bool>, drive_z + 1> mappings_;
 
-        std::string pack_name_;
-        eka2l1::loader::rom *rom_ = nullptr;
         epocver version_ = epocver::epoc6;
         std::string firmcode_;
         std::string model_;
