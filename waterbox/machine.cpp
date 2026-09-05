@@ -227,6 +227,10 @@ namespace chimera {
             eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
     }
 
+    int machine::install_package(const std::string &path) {
+        return sys_->install_package(eka2l1::common::utf8_to_ucs2(path), drive_c);
+    }
+
     bool machine::add_device_from_rom(const std::string &rom_path) {
         eka2l1::symfile rom_file = eka2l1::physical_file_proxy(rom_path, READ_MODE | BIN_MODE);
 

@@ -28,6 +28,7 @@
 #include <vector>
 
 #include <emulibc.h>
+#include <waterbox_slots.h>
 #include <waterboxcore.h>
 
 namespace {
@@ -73,6 +74,12 @@ namespace {
     // The ROM, under the name a chimera host mounts a core's firmware by. It
     // says which device it is and it carries drive Z.
     constexpr const char *ROM_NAME = "rom";
+
+    // A Symbian package to install into the machine before it runs, if the
+    // project has one.
+    constexpr const char *GAME_SLOT = "game";
+
+    int g_installed = -1;
 }
 
 extern "C" {
@@ -120,6 +127,18 @@ ECL_EXPORT int Init(void) {
         // drive it has been told about.
         for (const drive_number drv : { drive_c, drive_d, drive_e }) {
             g_machine->sys()->get_io_system()->announce_drive(drv, eka2l1::drive_action_mount);
+        }
+
+        // A package, if the project brought one. It installs into the
+        // machine's own drive C, which lives in the machine's memory and
+        // therefore in its savestates.
+        char slot_name[256] = { 0 };
+
+        if (wbx_slot_name(GAME_SLOT, 0, slot_name, sizeof slot_name) != nullptr) {
+            g_installed = g_machine->install_package(slot_name);
+        } else if (std::FILE *plain = std::fopen(GAME_SLOT, "rb")) {
+            std::fclose(plain);
+            g_installed = g_machine->install_package(GAME_SLOT);
         }
 
         g_device = true;
@@ -302,6 +321,11 @@ ECL_EXPORT std::uint64_t GetDriveEntries(void) {
 
 ECL_EXPORT std::uint64_t GetDriveWrittenBytes(void) {
     return g_drives ? g_drives->written_bytes() : 0;
+}
+
+// What the package install said: -1 for "there was none", 0 for installed.
+ECL_EXPORT int GetInstallResult(void) {
+    return g_installed;
 }
 
 }

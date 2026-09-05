@@ -1,5 +1,5 @@
 {
-  "_comment": "The core-declared file form for chimera's project wizard. A Symbian project is a DEVICE: one ROM image, which says which phone it is and carries the phone's own filesystem. Games are not loadable yet.",
+  "_comment": "The core-declared file form for chimera's project wizard. A Symbian project is a DEVICE - one ROM image, which says which phone it is and carries the phone's own filesystem - and, if the project wants one, a package installed onto it before it runs.",
   "slots": [
     {
       "id": "rom",
@@ -11,6 +11,17 @@
         "img"
       ],
       "help": "A Symbian phone's ROM image (the file EKA2L1 calls SYM.ROM). It says which device it is - manufacturer, model, firmware code and Symbian version - and it carries drive Z, so nothing else is needed."
+    },
+    {
+      "id": "game",
+      "title": "Package",
+      "min": 0,
+      "max": 1,
+      "formats": [
+        "sis",
+        "sisx"
+      ],
+      "help": "A Symbian installation package (.sis or .sisx) installed onto drive C before the machine starts. What it writes lives in the machine's memory, so it is part of every savestate and every movie made from this project."
     }
   ]
 }

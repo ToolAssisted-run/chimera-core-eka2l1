@@ -84,6 +84,7 @@ int main(int argc, char **argv) {
     std::string run_path;
     std::string probe_path;
     std::string rom_only_path;
+    std::string install_path;
     bool print_rom_path = false;
     bool verbose = false;
     bool gpu = false;
@@ -106,6 +107,8 @@ int main(int argc, char **argv) {
             options.host_clock = true;
         } else if ((std::strcmp(argv[i], "--probe") == 0) && has_value) {
             probe_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--install") == 0) && has_value) {
+            install_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--rom-only") == 0) && has_value) {
             rom_only_path = argv[++i];
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
@@ -243,6 +246,15 @@ int main(int argc, char **argv) {
     // The memory model follows the device's Symbian version, so the MMU only
     // exists once a device has been set.
     std::printf("memory: %s\n", machine.sys()->get_memory_system() ? "up" : "absent, no device");
+
+    if (!install_path.empty()) {
+        // A package into the machine, the way the emulator's own installer
+        // does it. Drive C is where a Symbian phone puts applications.
+        const int result = machine.sys()->install_package(
+            eka2l1::common::utf8_to_ucs2(install_path), drive_c);
+
+        std::printf("install: %d\n", result);
+    }
 
     if (print_rom_path) {
         // The exact name the emulator will open the ROM under. A sandbox has
@@ -425,6 +437,13 @@ int main(int argc, char **argv) {
                 write_tga(screen_out.c_str(), screen.data(), width, height);
             }
         }
+    }
+
+    if (drives) {
+        // How much of a filesystem the machine is holding, and how much of it
+        // the machine wrote - the same two numbers the sandbox reports.
+        std::printf("drive entries: %zu\n", drives->entry_count());
+        std::printf("drive written: %zu bytes\n", drives->written_bytes());
     }
 
     std::printf("frames: %d at %d fps\n", frames, fps);

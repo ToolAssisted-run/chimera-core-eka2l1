@@ -1,0 +1,113 @@
+diff --git a/src/emu/package/src/sis_script_interpreter.cpp b/src/emu/package/src/sis_script_interpreter.cpp
+index 4bd18318b..462e6c603 100644
+--- a/src/emu/package/src/sis_script_interpreter.cpp
++++ b/src/emu/package/src/sis_script_interpreter.cpp
+@@ -131,15 +131,14 @@ namespace eka2l1 {
+         }
+ 
+         bool ss_interpreter::extract_file(const std::string &path, const uint32_t idx, uint16_t crr_blck_idx) {
+-            std::string rp = eka2l1::file_directory(path);
+-            common::create_directories(rp);
++            // The path is the machine's, not the host's: a package installs
++            // into the emulated drive through the emulated filesystem. The
++            // drive may not be a directory somebody can write to - it can be
++            // served from memory, or from an archive - and a raw host path is
++            // exactly what such a drive does not have.
++            const std::u16string wide_path = common::utf8_to_ucs2(path);
+ 
+-            // Delete the file, starts over
+-            if (common::is_path_case_insensitive(path) && common::exists(path)) {
+-                if (!common::remove(path)) {
+-                    LOG_WARN(PACKAGE, "Unable to remove {} to extract new file", path);
+-                }
+-            }
++            io->create_directories(common::utf8_to_ucs2(eka2l1::file_directory(path)));
+ 
+             sis_data_unit *data_unit = reinterpret_cast<sis_data_unit *>(install_data->data_units.fields[crr_blck_idx].get());
+ 
+@@ -176,7 +175,14 @@ namespace eka2l1 {
+             bool cancel_requested = false;
+ 
+             {
+-                common::wo_std_file_stream std_fstream(path, true);
++                // Opening for write starts the file over, which is what the
++                // explicit delete used to be for.
++                symfile target = io->open_file(wide_path, WRITE_MODE | BIN_MODE);
++
++                if (!target) {
++                    LOG_ERROR(PACKAGE, "Unable to open {} to extract into", path);
++                    return false;
++                }
+ 
+                 while (left > 0) {
+                     if (cancel_cb && cancel_cb()) {
+@@ -204,12 +210,12 @@ namespace eka2l1 {
+                             return false;
+                         }
+ 
+-                        std_fstream.write(temp_inflated_chunk.data(), inflated_size);
++                        target->write_file(temp_inflated_chunk.data(), 1, inflated_size);
+ 
+                         total_inflated_size += inflated_size;
+                         extract_target_decomped_size += inflated_size;
+                     } else {
+-                        std_fstream.write(temp_chunk.data(), grab);
++                        target->write_file(temp_chunk.data(), 1, static_cast<std::uint32_t>(grab));
+                         extract_target_decomped_size += grab;
+                     }
+ 
+@@ -236,7 +242,7 @@ namespace eka2l1 {
+             }
+ 
+             if (cancel_requested) {
+-                common::remove(path);
++                io->delete_entry(wide_path);
+                 return false;
+             }
+ 
+@@ -656,30 +662,31 @@ namespace eka2l1 {
+                         }
+ 
+                         if (!install_data->data_units.fields.empty()) {
+-                            std::string raw_path;
++                            std::string install_path;
+                             if (!file_target.empty()) {
+-                                const std::string install_path = get_install_path(file->target.unicode_string, install_drive);
+-                                const std::optional<std::u16string> raw_path_opt = io->get_raw_path(common::utf8_to_ucs2(install_path));
+-                                if (!raw_path_opt) {
+-                                    LOG_ERROR(PACKAGE, "Unable to resolve SIS install target: {}", install_path);
+-                                    return false;
+-                                }
+-                                raw_path = common::ucs2_to_utf8(*raw_path_opt);
++                                install_path = get_install_path(file->target.unicode_string, install_drive);
+                             }
+ 
+                             extract_target_info info;
+-                            info.file_path_ = raw_path;
++                            info.file_path_ = install_path;
+                             info.data_unit_block_index_ = file->idx;
+                             info.data_unit_index_ = crr_blck_idx;
+ 
+                             extract_targets.push_back(info);
+                             extract_target_accumulated_size += file->uncompressed_len;
+ 
+-                            const std::string raw_path_lower = common::lowercase_string(raw_path);
+-                            if ((FOUND_STR(raw_path_lower.find(".sis")) || FOUND_STR(raw_path_lower.find(".sisx")))
+-                                && loader::identify_sis_type(raw_path).has_value()) {
+-                                LOG_INFO(PACKAGE, "Detected an SmartInstaller SIS, path at: {}", raw_path);
+-                                gathered_sis_paths.push_back(common::utf8_to_ucs2(raw_path));
++                            // A package inside the package. Identifying it
++                            // still wants a host path, so a drive that has none
++                            // simply does not nest.
++                            const std::string install_path_lower = common::lowercase_string(install_path);
++                            if (FOUND_STR(install_path_lower.find(".sis")) || FOUND_STR(install_path_lower.find(".sisx"))) {
++                                const std::optional<std::u16string> raw_path_opt = io->get_raw_path(
++                                    common::utf8_to_ucs2(install_path));
++
++                                if (raw_path_opt && loader::identify_sis_type(common::ucs2_to_utf8(*raw_path_opt)).has_value()) {
++                                    LOG_INFO(PACKAGE, "Detected an SmartInstaller SIS, path at: {}", install_path);
++                                    gathered_sis_paths.push_back(*raw_path_opt);
++                                }
+                             }
+                         }
+                     } else {

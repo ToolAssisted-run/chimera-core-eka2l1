@@ -223,6 +223,33 @@ else
 				echo "PASS in-box: native == sandbox with the device ($(echo "$boxp" | tr '\n' ' '))"
 				pass=$((pass + 1))
 			fi
+
+			# ---- a package installs into the machine --------------------
+			# Upstream's own test package, which is in this repository and
+			# needs no ROM of anybody's. It installs into drive C, which is
+			# the machine's own memory - so what lands there is machine state
+			# and travels in its savestates, and both flavors must write
+			# exactly the same amount of it.
+			sis="$root/extern/eka2l1/src/intests/sis/intests.sis"
+			digest3='^(install|apps|drive entries|drive written):'
+
+			rm -rf "$work/install"
+			mkdir -p "$work/install"
+
+			nati="$(timeout 900 "$rn" --data "$work/install" --rom-only "$rom" --frames 60 --install "$sis" 2>&1 | grep -E "$digest3" | sort)"
+			boxi="$(timeout 900 "$rw" "$core" --frames 60 --rom "$rom" --game "$sis" 2>&1 | grep -E "$digest3" | sort)"
+
+			if ! echo "$boxi" | grep -q "^install: 0"; then
+				echo "FAIL install (the sandbox refused the package)"; echo "$boxi"; fail=$((fail + 1))
+			elif [ "$nati" != "$boxi" ]; then
+				echo "FAIL install (native vs sandbox)"
+				echo "$nati" > "$work/nati.txt"
+				echo "$boxi" > "$work/boxi.txt"
+				diff "$work/nati.txt" "$work/boxi.txt" | head -20; fail=$((fail + 1))
+			else
+				echo "PASS install: native == sandbox ($(echo "$boxi" | grep 'drive' | tr '\n' ' '))"
+				pass=$((pass + 1))
+			fi
 		fi
 	fi
 fi

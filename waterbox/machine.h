@@ -67,6 +67,12 @@ namespace chimera {
         // device, which is a separate question.
         void startup();
 
+        // Installs a Symbian package into the machine, on drive C. The path
+        // is a file the host mounted; what it writes goes into the machine's
+        // own filesystem. Returns the emulator's own result code, 0 for
+        // installed.
+        int install_package(const std::string &path);
+
         // Works out which device a ROM is - from the ROM - and registers it.
         // The machine then has one device, and its ROM is that file wherever
         // it happens to be. False when the ROM says nothing recognisable.

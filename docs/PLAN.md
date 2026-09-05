@@ -318,6 +318,27 @@ the core brings, and the machine it matters for is a **game**: an N-Gage title
 creates its own window and draws into it directly rather than through AVKON.
 Proving the picture therefore waits on a game to run - see the open questions.
 
+## A package installs into the machine (2026-09-05)
+
+Patch 0019 makes the SIS installer write through the emulated filesystem instead
+of resolving a host path and writing there. Nothing else changes: the same
+interpreter, the same decompression, the same targets - but the path it extracts
+to is the machine's (`C:\sys\bin\...`) rather than the host's, so a drive that
+has no directory behind it takes an installation like any other. A package inside
+a package is the one thing that still wants a host path to identify itself, so a
+drive without one simply does not nest.
+
+Proven with upstream's own test package (`src/intests/sis/intests.sis`, in this
+repository, needing nobody's ROM): 51 entries and 77,399 bytes land on drive C,
+identically in both flavors, and what lands there is the machine's memory - so it
+is in every savestate and every movie made from the project.
+
+Games are still not loadable. The N-Gage game-card installer unpacks an archive
+into a host staging directory and then copies it with host calls; the same
+treatment would move it onto the VFS. `.blz` needs a third-party installer app
+(BLZinstapp) run inside the machine, which needs the picture, which needs the
+S60v1 UI to come up.
+
 ## Open questions
 
 - Which device dump and which games the gate will cite. Nothing real can be proven

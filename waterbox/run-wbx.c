@@ -41,13 +41,14 @@ static uintptr_t proc(mb_host *h, const char *n)
 
 int main(int argc, char **argv)
 {
-	const char *core = NULL, *rom = NULL;
+	const char *core = NULL, *rom = NULL, *game = NULL;
 	long frames = 60;
 	uint32_t run_uid = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
+		else if (!strcmp(argv[i], "--game") && i + 1 < argc) game = argv[++i];
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
@@ -76,6 +77,11 @@ int main(int argc, char **argv)
 	if (rom) {
 		wbx_mount_file_path(h, "rom", rom, &r);
 		if (r.error_message[0]) { fprintf(stderr, "mount rom: %s\n", r.error_message); return 1; }
+	}
+
+	if (game) {
+		wbx_mount_file_path(h, "game", game, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount game: %s\n", r.error_message); return 1; }
 	}
 
 	intfn Init = (intfn)proc(h, "Init");
@@ -114,7 +120,10 @@ int main(int argc, char **argv)
 
 	u64fn GetAppCount = (u64fn)proc(h, "GetAppCount");
 
+	intfn GetInstallResult = (intfn)proc(h, "GetInstallResult");
+
 	printf("device: %s\n", GetDeviceMounted() ? "mounted" : "none");
+	printf("install: %d\n", GetInstallResult());
 	printf("apps: %" PRIu64 "\n", GetAppCount());
 	printf("drive entries: %" PRIu64 "\n", GetDriveEntries());
 	printf("drive written: %" PRIu64 " bytes\n", GetDriveWrittenBytes());
