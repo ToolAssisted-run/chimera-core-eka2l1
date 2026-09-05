@@ -1,0 +1,148 @@
+# EKA2L1 -> Chimera waterbox core: the plan
+
+Written 2026-09-05 at the start of the effort; update as milestones land. The goal is a
+working, deterministic, waterboxed EKA2L1 core package: Symbian OS and the N-Gage as a
+citable machine. The dyncom interpreter first, dynarmic as a later speed setting, the
+graphics command list executed inline on the emulation thread, no user interface, no
+networking, no real audio or input devices.
+
+## What the survey found (2026-09-05, upstream @ 1bc5c8cf2)
+
+- **Scale**: 250k lines under `src/emu`, 502 translation units, plus 40 vendored
+  submodules. Roughly flycast's size; a quarter of rpcs3's.
+- **Language**: C++17, CMake, exceptions on. Host gcc 13.3 builds it.
+- **The core is already a library.** `system` is constructed with an injected
+  `drivers::graphics_driver *` and `drivers::audio_driver *`
+  (`src/emu/system/include/system/epoc.h:111`), and the frontend's emulation thread is
+  a bare `while (!quit) symsys->loop();` (`src/emu/qt/src/thread.cpp:313`). The Qt
+  frontend is added unconditionally on desktop (`src/emu/CMakeLists.txt:62`) - that is
+  patch 0001, an option, not a deletion.
+- **No fastmem, no signal handlers.** Memory is a page-table MMU with an explicit
+  address-space model (`src/emu/mem/`). The whole emulator has three `mmap` call sites
+  and zero `SIGSEGV` handlers, so the sandbox needs to serve nothing but ordinary
+  anonymous pages. This is the single biggest difference from PCSX2 and rpcs3.
+- **Time is the wall clock, and it has exactly two seams.**
+    + `common::teletimer` is a pure virtual interface behind one factory,
+      `common::make_teletimer` (`src/emu/common/include/common/time.h:86,101`), and only
+      `ntimer` ever holds one (`src/emu/kernel/src/timing.cpp:41`). Every emulated tick,
+      every kernel timer deadline and every `after`/`at` request reads it. Replace what
+      the factory returns and the machine's clock is ours.
+    + `common::get_current_utc_time_in_microseconds_since_{epoch,0ad}`
+      (`src/emu/common/src/time.cpp:45,49`) is the calendar clock: the kernel's base
+      time, window-server event timestamps, package install timestamps, DRM and
+      centralrepo. Nine call sites, one seam, a fixed epoch plus virtual offset.
+- **`ntimer` owns a host thread** (`src/emu/kernel/src/timing.cpp:86`) that sleeps on
+  real microseconds and fires kernel timer events. It already exposes `advance()`
+  returning the microseconds until the next event, so the loop can pump it; the thread
+  is what has to go.
+- **The scheduler blocks when nothing is runnable** (`src/emu/kernel/src/scheduler.cpp:131`),
+  but only behind `kernel_system::should_core_idle_when_inactive()`, which is the
+  `cpu_load_save` config flag (`src/emu/kernel/src/kernel.cpp:1462`). Turned off, the
+  loop returns instead of sleeping and the driver jumps virtual time to the next timer
+  deadline. No patch needed for this one.
+- **The logger writes two files into the working directory**, `EKA2L1.log` and
+  `EKA2L1_TakeThis.log` (`src/emu/common/src/log.cpp:200`), with no way to point it
+  elsewhere. Harmless natively, but a core does not write where it likes: inside the
+  sandbox this lands in the memfs, and the sink becomes a seam of its own at M2.
+- **Other host threads, all removable**: the FBS bitmap compressor
+  (`src/emu/services/src/fbs/fbs.cpp:461`), the applist loading pool
+  (`src/emu/services/src/applist/applist.cpp:149`), ffmpeg's video decode thread, the
+  SDL2 controller poller, the filesystem watcher and upnp. None of them is on the path
+  of a game that draws and plays sound; each becomes synchronous or is compiled out.
+- **CPU: three backends, one of them an interpreter.** `dyncom` (interpreter),
+  `dynarmic` (x86-64 JIT), `12l1r` (their own recompiler, 32-bit ARM hosts only).
+  Upstream already carries `EKA2L1_CPU_DYNCOM_ONLY_BUILD` and a differential harness
+  that checks two backends agree (`src/emu/cpu/src/arm_factory.cpp:32`). The
+  interpreter is the reference; dynarmic is a later setting with an agreement leg.
+- **Graphics is a command list, not a live GL API.** Everything the OS side does goes
+  through `submit_command_list` (`src/emu/drivers/include/drivers/graphics/graphics.h:185`)
+  and is executed by `shared_graphics_driver` on the frontend's graphics thread. On our
+  side the queue is pumped inline after each slice, so there is no second thread. The
+  backend is glad-loaded OpenGL / GLES3 (`.../backend/ogl/graphics_ogl.cpp:36,58`), which
+  is the same shape the GL bridge already feeds. `graphics_driver_read_bitmap`
+  (`src/emu/drivers/src/itc.cpp:220`) is the video readback, already a supported command.
+- **Audio is a pull-callback stream**: `audio_driver::new_output_stream(rate, channels,
+  callback)` (`src/emu/drivers/include/drivers/audio/audio.h:75`). Our driver renders
+  exactly the samples a frame needs and never touches a host device.
+- **Content is a device dump plus a game.** A device installs from a single archive
+  holding `data/drives/z/<firmware code>/` and `data/roms/<firmware code>/`
+  (`src/emu/system/include/system/installation/archive.h:39`) - one file, one SHA1, so
+  Chimera's firmware channel takes it unchanged. Games are `.sis`/`.sisx` installs or
+  N-Gage game cards (`system::install_ngage_game_card`, `epoc.h:183`). Whatever the
+  install writes is persistent device state, which is what the bundle mechanism is for.
+- **The embedder owes the emulator four host functions.** `drivers::ui::open_input_view`,
+  `close_input_view`, `show_yes_no_dialog` (`src/emu/drivers/include/drivers/ui/input_dialog.h`)
+  and `common::launch_browser` are declared, called from the dispatcher and the notifier
+  service, and defined only by the frontends. A core answers all four itself. The yes/no
+  answer cannot be given where the question is asked - the notifier holds the kernel
+  lock, and completing the request takes that same non-recursive lock - so it is queued
+  and delivered between steps (`waterbox/host-ui.cpp`).
+- **Upstream ships its own Symbian test app** under `src/intests/` with expected
+  outputs, and a host-side gtest/Catch2 suite (`src/tests/`, target `ekatests`) covering
+  the kernel, the MMU, the VFS, the loader, the services and the drivers. The latter
+  needs no ROM at all and is the first honest workload this port can run.
+
+## Architecture decisions
+
+- **Upstream pin**: `extern/eka2l1` = EKA2L1/EKA2L1 @ `1bc5c8cf2`, submodules recursive.
+  Unmodified; local changes live in `patches/` (numbered, applied by
+  `waterbox/apply-patches.sh`), each a build option or a hook, never a deletion.
+- **Upstream's own CMake, driven by our option set.** `waterbox/build-native.sh` and
+  `waterbox/build-guest.sh` configure the same tree with the same options and differ
+  only by the toolchain file, the dolphin recipe. Off: the Qt frontend, the tools, the
+  Vulkan backend, LuaJIT scripting, discord, upnp, the camera. The vendored externals
+  we cannot avoid (ffmpeg, capstone, mbedtls, freetype, libarchive, xz, zlib, re2,
+  lunasvg, libtess2, pugixml, yaml-cpp, spdlog, fmt, glm, stb, xxHash, libfat) are built
+  from source for both flavors, so decoded media and packed bitmaps are flavor-identical.
+- **Virtual time is the core's, not miniBox's.** A `chimera_teletimer` returns
+  microseconds derived from instructions retired, `ntimer::advance()` is pumped from the
+  driver's step loop instead of a thread, and the calendar clock is a fixed epoch plus
+  the same virtual offset. The native reference build uses it too, so native and sandbox
+  are the same machine and the equivalence gate means something.
+- **A frame is a fixed slice of virtual time.** Symbian has no video clock: nothing in
+  the machine says when a frame ends. The core declares 60 Hz by default and steps the
+  machine by one slice of virtual microseconds per `FrameAdvance`, then reads back
+  whatever the window server has composited. An `fps` setting (ruffle's precedent)
+  raises the rate when a game wants finer input granularity; the movie cites it.
+- **The interpreter is the reference.** dyncom for every equivalence and rewind leg;
+  dynarmic arrives as a `cpuBackend` setting with its own agreement leg, never as the
+  default until it has one.
+- **No entropy in the box**: the calendar clock, the RNG, the MMC id and the device
+  serial are fixed by the core, not read from the host.
+
+## Milestones
+
+- **M0 - the native reference builds and runs headless.** Patch 0001 makes the desktop
+  frontend optional; `build-native.sh` configures upstream with the option set above and
+  builds the emulator libraries plus `ekatests`. Proof: `ekatests` green, and a
+  `run-native` harness that constructs `system`, starts it with no device installed and
+  tears it down cleanly, twice, with byte-identical output.
+- **M1 - virtual time.** The teletimer seam, the calendar seam, `ntimer` pumped from the
+  loop, the timer thread gone, `cpu_load_save` off, the FBS and applist threads made
+  synchronous. Proof: two native runs of the same workload agree instruction for
+  instruction, and the run takes the same number of instructions under `nice -20` and
+  under load.
+- **M2 - core.wbx.** The guest toolchain build, the syscall gaps closed, the emulator
+  boots a device inside the sandbox with no graphics driver. Proof: native == sandbox on
+  a memory digest over N frames.
+- **M3 - the picture.** The command list pumped inline, the ogl backend fed by the GL
+  bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
+  native reference's pixels.
+- **M4 - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
+  a real game card booting to its title screen.
+- **M5 - savestates and rewind.** Arena snapshots, the rewind leg, the GPU-state rule
+  the bridge already carries.
+- **M6 - the package.** `eka2l1.chimeraCore`, the firmware declaration for the device
+  dump, the bundle for what the device writes, default keybinds, the licence manifest.
+- **M7 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
+  upstream's own differential harness.
+
+## Open questions
+
+- Which device dump and which games the gate will cite. Nothing real can be proven
+  without one, and neither dump nor game is ever committed.
+- Whether a frame boundary at a fixed slice of virtual time is stable enough for
+  rerecording, or whether the window server's composite should define it instead. The
+  first is simpler and matches ruffle; the second is truer to what the machine draws.
+- Whether the guest needs ffmpeg at all for the first playable games, or whether the
+  MMF path can stay stubbed until something asks for it.

@@ -1,0 +1,11 @@
+build/
+build-*.log
+minibox-diag.log
+tests/content-local/
+waterbox/bin/
+waterbox/obj-native/
+waterbox/obj-guest/
+waterbox/work/
+waterbox/tests/work/
+EKA2L1.log
+EKA2L1_TakeThis.log
