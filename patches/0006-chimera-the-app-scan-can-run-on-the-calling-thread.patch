@@ -16,48 +16,92 @@ index efa97cc01..58493a5f1 100644
          bool mime_detection{ true };
  
          std::atomic<bool> stepping{ false };
+diff --git a/src/emu/services/include/services/applist/applist.h b/src/emu/services/include/services/applist/applist.h
+index f472864cd..251bdcf5d 100644
+--- a/src/emu/services/include/services/applist/applist.h
++++ b/src/emu/services/include/services/applist/applist.h
+@@ -27,6 +27,7 @@
+ #include <vfs/vfs.h>
+ 
+ #include <functional>
++#include <memory>
+ #include <mutex>
+ #include <vector>
+ 
+@@ -220,7 +221,12 @@ namespace eka2l1 {
+         fbs_server *fbsserv;
+         fs_server *fsserv;
+ 
+-        BS::thread_pool loading_thread_pool_;
++        // Built on first use rather than with the server: a scan that runs on
++        // the calling thread wants no pool at all, and the pool is as wide as
++        // the host has cores.
++        std::unique_ptr<BS::thread_pool> loading_thread_pool_;
++
++        BS::thread_pool &loading_thread_pool();
+ 
+         enum {
+             AL_INITED = 0x1
 diff --git a/src/emu/services/src/applist/applist.cpp b/src/emu/services/src/applist/applist.cpp
-index 18ac54d97..cd7c2b6a9 100644
+index 18ac54d97..67536019a 100644
 --- a/src/emu/services/src/applist/applist.cpp
 +++ b/src/emu/services/src/applist/applist.cpp
-@@ -434,22 +434,30 @@ namespace eka2l1 {
+@@ -145,8 +145,16 @@ namespace eka2l1 {
+         : service::typical_server(sys, get_app_list_server_name_by_epocver(sys->get_symbian_version_use()))
+         , drive_change_handle_(0)
+         , fbsserv(nullptr)
+-        , fsserv(nullptr)
+-        , loading_thread_pool_(std::thread::hardware_concurrency() <= 0 ? 4 : std::thread::hardware_concurrency()) {
++        , fsserv(nullptr) {
++    }
++
++    BS::thread_pool &applist_server::loading_thread_pool() {
++        if (!loading_thread_pool_) {
++            loading_thread_pool_ = std::make_unique<BS::thread_pool>(
++                std::thread::hardware_concurrency() <= 0 ? 4 : std::thread::hardware_concurrency());
++        }
++
++        return *loading_thread_pool_;
+     }
+ 
+     applist_server::~applist_server() {
+@@ -434,22 +442,30 @@ namespace eka2l1 {
                  rescan_registries_on_drive_newarch(io, drv, register_file_paths);
              }
  
 -            auto load_registry_task = loading_thread_pool_.submit_loop<std::size_t>(0, register_file_paths.size(),
 -                [this, &register_file_paths, &modified, io, drv](std::size_t idx) {
 -                    bool entry_modified = false;
--
++            auto load_one = [this, &register_file_paths, &modified, io, drv](std::size_t idx) {
++                bool entry_modified = false;
+ 
 -                    if (kern->is_eka1()) {
 -                        entry_modified = load_registry_oldarch(io, register_file_paths[idx], drv, language::en);
 -                    } else {
 -                        entry_modified = load_registry(io, register_file_paths[idx], drv, language::en);
 -                    }
-+            auto load_one = [this, &register_file_paths, &modified, io, drv](std::size_t idx) {
-+                bool entry_modified = false;
- 
--                    if (entry_modified) {
--                        modified = true;
--                    }
--                });
 +                if (kern->is_eka1()) {
 +                    entry_modified = load_registry_oldarch(io, register_file_paths[idx], drv, language::en);
 +                } else {
 +                    entry_modified = load_registry(io, register_file_paths[idx], drv, language::en);
 +                }
  
--            load_registry_task.wait();
+-                    if (entry_modified) {
+-                        modified = true;
+-                    }
+-                });
 +                if (entry_modified) {
 +                    modified = true;
 +                }
 +            };
-+
+ 
+-            load_registry_task.wait();
 +            if (sys->get_config()->single_thread_app_scan) {
 +                for (std::size_t idx = 0; idx < register_file_paths.size(); idx++) {
 +                    load_one(idx);
 +                }
 +            } else {
-+                auto load_registry_task = loading_thread_pool_.submit_loop<std::size_t>(0,
++                auto load_registry_task = loading_thread_pool().submit_loop<std::size_t>(0,
 +                    register_file_paths.size(), load_one);
 +
 +                load_registry_task.wait();
@@ -65,7 +109,7 @@ index 18ac54d97..cd7c2b6a9 100644
              break;
          }
  
-@@ -552,25 +560,33 @@ namespace eka2l1 {
+@@ -552,25 +568,33 @@ namespace eka2l1 {
  
          auto current_lang = kern->get_current_language();
  
@@ -99,16 +143,16 @@ index 18ac54d97..cd7c2b6a9 100644
 +                global_modified = true;
 +            }
 +        };
-+
+ 
+-        load_registry_task.wait();
 +        if (sys->get_config()->single_thread_app_scan) {
 +            for (std::size_t idx = 0; idx < register_file_paths.size(); idx++) {
 +                load_one(idx);
 +            }
 +        } else {
-+            auto load_registry_task = loading_thread_pool_.submit_loop<std::size_t>(0,
++            auto load_registry_task = loading_thread_pool().submit_loop<std::size_t>(0,
 +                register_file_paths.size(), load_one);
- 
--        load_registry_task.wait();
++
 +            load_registry_task.wait();
 +        }
  

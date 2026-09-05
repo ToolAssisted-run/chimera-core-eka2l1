@@ -53,6 +53,11 @@ namespace chimera {
         std::size_t device_count() const;
         bool set_device(const std::size_t index);
 
+        // Everything the frontend's stage two does that a machine needs: the
+        // drives mounted, the user-side servers created, the package registry
+        // read. Call it after a device is set and before stepping.
+        void boot();
+
         // Runs the machine until its own clock has moved `us` forward. Returns
         // the number of times the emulator's loop was entered, which is a
         // property of the machine and not of the host.

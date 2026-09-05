@@ -1,9 +1,11 @@
 #include "machine.h"
 #include "host-ui.h"
 
+#include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
 #include <kernel/timing.h>
+#include <package/manager.h>
 #include <system/devices.h>
 #include <system/epoc.h>
 
@@ -76,6 +78,26 @@ namespace chimera {
 
     bool machine::set_device(const std::size_t index) {
         return sys_->set_device(static_cast<std::uint8_t>(index));
+    }
+
+    void machine::boot() {
+        // Drive Z is the ROM's own filesystem and can only be mounted once the
+        // device has been set, because setting the device is what loads the ROM.
+        sys_->mount(drive_c, drive_media::physical,
+            eka2l1::add_path(options_.storage, "/drives/c/"), io_attrib_internal);
+        sys_->mount(drive_d, drive_media::physical,
+            eka2l1::add_path(options_.storage, "/drives/d/"), io_attrib_internal);
+        sys_->mount(drive_e, drive_media::physical,
+            eka2l1::add_path(options_.storage, "/drives/e/"), io_attrib_removeable);
+        sys_->mount(drive_z, drive_media::rom,
+            eka2l1::add_path(options_.storage, "/drives/z/"),
+            io_attrib_internal | io_attrib_write_protected);
+
+        sys_->initialize_user_parties();
+
+        eka2l1::manager::packages *packages = sys_->get_packages();
+        packages->load_registries();
+        packages->migrate_legacy_registries();
     }
 
     std::uint64_t machine::run_for_us(const std::uint64_t us) {

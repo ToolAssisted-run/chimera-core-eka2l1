@@ -91,5 +91,51 @@ else
 	echo "FAIL threads: $threads (the timer thread is back)"; fail=$((fail + 1))
 fi
 
+# ---- a real device, and real Symbian code ----------------------------------
+# Only when the user's own ROM is here. It is never committed, and the gate
+# says so rather than failing when it is absent.
+rom="$root/tests/roms-local/SYM.ROM"
+installer="$root/build/native/install-device"
+
+if [ ! -f "$rom" ] || [ ! -x "$installer" ]; then
+	echo "SKIP device: no tests/roms-local/SYM.ROM (the ROM is the user's to supply)"
+else
+	mkdir -p "$work/device"
+	install_out="$(timeout 600 "$installer" --data "$work/device" --rom "$rom" 2>&1)"
+
+	if ! echo "$install_out" | grep -q "^install: ok"; then
+		echo "FAIL device (install)"; echo "$install_out"; fail=$((fail + 1))
+	else
+		echo "PASS device: $(echo "$install_out" | grep '^device 0:')"
+		pass=$((pass + 1))
+
+		# The machine's own menu, launched through its registration, for a
+		# second of emulated time. What matters is that the ARM interpreter
+		# executes the same instructions every time, and the same number of
+		# them whatever the host is doing.
+		boot() {
+			rm -rf "$work/boot"
+			cp -r "$work/device" "$work/boot"
+			timeout 900 "$rn" --data "$work/boot" --frames 60 --run 0x101f4cd2 "$@" 2>&1 				| grep -E '^(run|virtual us|instructions|loops):'
+		}
+
+		one="$(boot)"
+		two="$(boot)"
+		three="$(boot --sleep-ms 3)"
+
+		if ! echo "$one" | grep -q "started"; then
+			echo "FAIL boot (the application did not start)"; echo "$one"; fail=$((fail + 1))
+		elif [ "$one" != "$two" ] || [ "$one" != "$three" ]; then
+			echo "FAIL boot (runs disagree)"
+			echo "--- first"; echo "$one"
+			echo "--- second"; echo "$two"
+			echo "--- stalled"; echo "$three"; fail=$((fail + 1))
+		else
+			echo "PASS boot: $(echo "$one" | grep -E '^(instructions|loops):' | tr '\n' ' ')"
+			pass=$((pass + 1))
+		fi
+	fi
+fi
+
 echo "totals: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]

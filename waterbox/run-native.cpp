@@ -12,7 +12,11 @@
 #include "machine.h"
 
 #include <common/log.h>
+#include <common/cvt.h>
+#include <kernel/kernel.h>
 #include <kernel/timing.h>
+#include <services/applist/applist.h>
+#include <utils/apacmd.h>
 #include <system/devices.h>
 #include <system/epoc.h>
 
@@ -21,6 +25,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <thread>
 
 int main(int argc, char **argv) {
@@ -31,6 +36,8 @@ int main(int argc, char **argv) {
     int fps = 60;
     int sleep_ms = 0;
     int timer_period_us = 0;
+    bool list_apps = false;
+    std::string run_path;
 
     for (int i = 1; i < argc; i++) {
         const bool has_value = (i + 1 < argc);
@@ -47,6 +54,10 @@ int main(int argc, char **argv) {
             timer_period_us = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--host-clock") == 0) {
             options.host_clock = true;
+        } else if (std::strcmp(argv[i], "--list-apps") == 0) {
+            list_apps = true;
+        } else if ((std::strcmp(argv[i], "--run") == 0) && has_value) {
+            run_path = argv[++i];
         } else {
             std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
             return 2;
@@ -89,12 +100,68 @@ int main(int argc, char **argv) {
     std::printf("timer: %s driven\n", machine.sys()->get_ntimer()->driven() ? "up," : "up, NOT");
 
     if (devices > 0) {
-        std::printf("device 0: %s\n", machine.set_device(0) ? "set" : "refused");
+        const bool set = machine.set_device(0);
+        std::printf("device 0: %s\n", set ? "set" : "refused");
+
+        if (set) {
+            machine.boot();
+            std::printf("boot: ok\n");
+        }
     }
 
     // The memory model follows the device's Symbian version, so the MMU only
     // exists once a device has been set.
     std::printf("memory: %s\n", machine.sys()->get_memory_system() ? "up" : "absent, no device");
+
+    if (list_apps || !run_path.empty()) {
+        eka2l1::kernel_system *kern = machine.sys()->get_kernel_system();
+        eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
+            kern->get_by_name<eka2l1::service::server>(
+                eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+
+        if (!applist) {
+            std::printf("apps: no application list server\n");
+        } else if (list_apps) {
+            std::vector<eka2l1::apa_app_registry> &regs = applist->get_registerations();
+            std::printf("apps: %zu\n", regs.size());
+
+            for (auto &reg : regs) {
+                std::printf("app 0x%08x: %s\n", reg.mandatory_info.uid,
+                    eka2l1::common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr)).c_str());
+            }
+        }
+
+        if (!run_path.empty() && applist) {
+            // An application is launched the way the machine's own launcher
+            // would: through its registration, not by opening a file. On EKA1
+            // the executable behind a registration is not even the thing on
+            // disk that carries its name.
+            const bool by_uid = (run_path.size() > 2) && (run_path.substr(0, 2) == "0x");
+            bool started = false;
+
+            if (by_uid) {
+                const std::uint32_t uid = static_cast<std::uint32_t>(std::strtoul(run_path.c_str(), nullptr, 16));
+                eka2l1::apa_app_registry *registry = applist->get_registration(uid);
+
+                if (registry) {
+                    eka2l1::epoc::apa::command_line cmdline;
+                    cmdline.launch_cmd_ = eka2l1::epoc::apa::command_create;
+
+                    started = applist->launch_app(*registry, cmdline, nullptr, nullptr);
+                }
+            } else {
+                eka2l1::process_ptr process = kern->spawn_new_process(
+                    eka2l1::common::utf8_to_ucs2(run_path), u"");
+
+                if (process) {
+                    process->run();
+                    started = true;
+                }
+            }
+
+            std::printf("run: %s %s\n", run_path.c_str(), started ? "started" : "refused");
+        }
+    }
 
     // A kernel timer of our own, if asked for. It is the only workload an
     // empty machine has: the nanokernel timer is what the whole port's notion
@@ -152,13 +219,34 @@ int main(int argc, char **argv) {
 
     if (!ec) {
         std::size_t threads = 0;
+        std::string names;
 
         for (const auto &entry : tasks) {
-            (void)entry;
             threads++;
+
+            // The name says which one, which is the whole point when a thread
+            // that should not exist turns up.
+            std::FILE *comm = std::fopen((entry.path() / "comm").c_str(), "r");
+
+            if (comm) {
+                char name[64] = { 0 };
+
+                if (std::fgets(name, sizeof(name), comm)) {
+                    std::string trimmed(name);
+                    trimmed.erase(trimmed.find_last_not_of(" \n\r\t") + 1);
+
+                    if (!names.empty()) {
+                        names += ", ";
+                    }
+
+                    names += trimmed;
+                }
+
+                std::fclose(comm);
+            }
         }
 
-        std::printf("host threads: %zu\n", threads);
+        std::printf("host threads: %zu (%s)\n", threads, names.c_str());
     }
 
     std::printf("teardown: ok\n");

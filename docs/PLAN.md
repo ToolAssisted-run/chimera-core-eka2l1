@@ -47,7 +47,8 @@ networking, no real audio or input devices.
 - **The logger writes two files into the working directory**, `EKA2L1.log` and
   `EKA2L1_TakeThis.log` (`src/emu/common/src/log.cpp:200`), with no way to point it
   elsewhere. Harmless natively, but a core does not write where it likes: inside the
-  sandbox this lands in the memfs, and the sink becomes a seam of its own at M2.
+  sandbox this lands in the memfs, and the sink becomes a seam of its own at M2. The
+  configuration writes itself back to `config.yml` in the working directory too.
 - **Other host threads, all removable**: the FBS bitmap compressor
   (`src/emu/services/src/fbs/fbs.cpp:461`), the applist loading pool
   (`src/emu/services/src/applist/applist.cpp:149`), ffmpeg's video decode thread, the
@@ -68,6 +69,24 @@ networking, no real audio or input devices.
 - **Audio is a pull-callback stream**: `audio_driver::new_output_stream(rate, channels,
   callback)` (`src/emu/drivers/include/drivers/audio/audio.h:75`). Our driver renders
   exactly the samples a frame needs and never touches a host device.
+- **The N-Gage ROM is a device on its own.** The user's `SYM.ROM` installs through
+  `install_rom_with_optional_rpkg` with no RPKG needed and comes up as
+  `(c)NMP V 4.03 (NEM-4)`, epocver 2 (Symbian 6.1, EKA1) - the N-Gage classic. It
+  carries 58 applications on drive Z.
+- **`.blz` is not a game EKA2L1 can read.** It is a Blizzard installer package, the
+  format N-Gage titles were distributed in, and upstream has no code for it at all. The
+  supported route is a third-party `BLZinstapp` SIS installed into the machine, the
+  `.blz` placed on drive E, and the installer run inside the emulator to unpack it.
+  What that leaves behind - an installed application on drive C - is what a core would
+  actually cite, which makes it bundle content rather than a ROM.
+- **There is no "boot the OS".** EKA2L1 reimplements the kernel and runs individual
+  Symbian executables; nothing happens until an application is launched, by
+  registration through the application list server or by path. Until then the machine
+  runs zero instructions, which is not a fault.
+- **A second host thread appears when a Symbian app watches a directory.**
+  `io_system::watch_directory` builds a `common::directory_watcher` on first use
+  (`src/emu/vfs/src/vfs.cpp:1013`), and that is inotify plus a thread. It has to go for
+  the guest; M2's problem.
 - **Content is a device dump plus a game.** A device installs from a single archive
   holding `data/drives/z/<firmware code>/` and `data/roms/<firmware code>/`
   (`src/emu/system/include/system/installation/archive.h:39`) - one file, one SHA1, so
@@ -131,9 +150,13 @@ networking, no real audio or input devices.
   over a second of emulated time: 999 firings, none of them late, identical with the
   host stalled 5 ms every frame - and the same machine left on the host clock does
   notice that stall, which is what says the check has teeth. One host thread.
-- **M2 - core.wbx.** The guest toolchain build, the syscall gaps closed, the emulator
-  boots a device inside the sandbox with no graphics driver. Proof: native == sandbox on
-  a memory digest over N frames.
+- **M2 - the machine runs. The native half is DONE 2026-09-05**: the ROM installs as a
+  device (`waterbox/install-device`, provisioning, outside the machine), drive Z, C, D
+  and E mount, the application list scans, and the machine's own menu launches through
+  its registration and executes 681,873 ARM instructions in a second of emulated time -
+  the same 681,873 every run, and the same with the host stalled 3 ms a frame. What
+  remains is the sandbox: the guest toolchain build, the syscall gaps, and the directory
+  watcher's thread. Proof: native == sandbox on a memory digest over N frames.
 - **M3 - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
