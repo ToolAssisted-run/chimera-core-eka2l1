@@ -14,14 +14,17 @@
     },
     {
       "id": "game",
-      "title": "Package",
+      "title": "Game or package",
       "min": 0,
       "max": 1,
       "formats": [
+        "rar",
+        "zip",
+        "7z",
         "sis",
         "sisx"
       ],
-      "help": "A Symbian installation package (.sis or .sisx) installed onto drive C before the machine starts. What it writes lives in the machine's memory, so it is part of every savestate and every movie made from this project."
+      "help": "An N-Gage game card - an archive holding the card's System\\\\Apps tree - copied onto drive E before the machine starts, or a Symbian installation package (.sis, .sisx) installed onto drive C. Either way what it writes lives in the machine's memory, so it is part of every savestate and every movie made from this project."
     }
   ]
 }

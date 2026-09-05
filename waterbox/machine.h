@@ -51,6 +51,11 @@ namespace chimera {
         // driven from this loop rather than from a thread of its own.
         bool graphics = false;
 
+        // Log every kernel call the machine makes. Diagnostics only: it is
+        // enormous, and it is the only way to see what a stalled application
+        // last asked for.
+        bool log_syscalls = false;
+
         // The rate the machine is asked to make sound at.
         std::uint32_t sample_rate = 44100;
     };
@@ -66,6 +71,13 @@ namespace chimera {
         // Builds the kernel, the timer and the CPU. The MMU arrives with the
         // device, which is a separate question.
         void startup();
+
+        // Copies an N-Gage game card into the machine, onto drive E, straight
+        // out of the archive it arrived in. The emulator's own card installer
+        // unpacks to a directory on the host first and then copies with host
+        // calls, which a machine whose drives are its own memory has no use
+        // for. Returns the number of files written, 0 for "not a card".
+        int install_card(const std::string &archive_path);
 
         // Installs a Symbian package into the machine, on drive C. The path
         // is a file the host mounted; what it writes goes into the machine's

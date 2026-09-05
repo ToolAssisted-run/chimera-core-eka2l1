@@ -107,3 +107,50 @@ int lstat(const char *path, struct stat *out) {
     return stat(path, out);
 }
 }
+
+#include <fcntl.h>
+#include <stdarg.h>
+#include <sys/syscall.h>
+
+extern "C" {
+
+// Nothing here execs, and every descriptor belongs to the sandbox, so
+// close-on-exec is a property with nobody to observe it.
+//
+// musl's open() asks the kernel for O_CLOEXEC by making a SECOND call - a raw
+// fcntl, not the fcntl below, which is why defining that alone did not help.
+// This strips the flag before the open ever happens.
+int open(const char *path, int flags, ...) {
+    mode_t mode = 0;
+
+    if (flags & O_CREAT) {
+        va_list args;
+        va_start(args, flags);
+        mode = static_cast<mode_t>(va_arg(args, int));
+        va_end(args);
+    }
+
+    return static_cast<int>(syscall(SYS_openat, AT_FDCWD, path, flags & ~O_CLOEXEC, mode));
+}
+
+// And the same question asked directly. There is no exec here and every
+// descriptor is the sandbox's own, so the flags are whatever the caller last
+// said and nothing acts on them.
+int fcntl(int fd, int cmd, ...) {
+    (void)fd;
+
+    switch (cmd) {
+    case F_GETFD:
+    case F_GETFL:
+        return 0;
+
+    case F_SETFD:
+    case F_SETFL:
+        return 0;
+
+    default:
+        errno = EINVAL;
+        return -1;
+    }
+}
+}

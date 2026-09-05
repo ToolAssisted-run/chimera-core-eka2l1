@@ -250,6 +250,37 @@ else
 				echo "PASS install: native == sandbox ($(echo "$boxi" | grep 'drive' | tr '\n' ' '))"
 				pass=$((pass + 1))
 			fi
+
+			# ---- a game card, and the game running ----------------------
+			# The user's own, never committed. The card is copied out of its
+			# archive straight onto the machine's drive E, the application
+			# list finds it, and it runs - the same instructions on both
+			# sides, which is the whole claim this core makes.
+			card="$(ls "$root"/tests/roms-local/*.rar "$root"/tests/roms-local/*.zip 2>/dev/null | head -1)"
+
+			if [ -z "$card" ]; then
+				echo "SKIP card: no game in tests/roms-local (the game is the user's to supply)"
+			else
+				digest4='^(apps|run|instructions|drive entries|drive written):'
+
+				rm -rf "$work/card"
+				mkdir -p "$work/card"
+
+				natc="$(timeout 1800 "$rn" --data "$work/card" --rom-only "$rom" --frames 300 --card "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
+				boxc="$(timeout 1800 "$rw" "$core" --frames 300 --rom "$rom" --game "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
+
+				if ! echo "$boxc" | grep -q "started"; then
+					echo "FAIL card (the game did not start in the sandbox)"; echo "$boxc"; fail=$((fail + 1))
+				elif [ "$natc" != "$boxc" ]; then
+					echo "FAIL card (native vs sandbox)"
+					echo "$natc" > "$work/natc.txt"
+					echo "$boxc" > "$work/boxc.txt"
+					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
+				else
+					echo "PASS card: native == sandbox ($(echo "$boxc" | grep -E '^(apps|instructions):' | tr '\n' ' '))"
+					pass=$((pass + 1))
+				fi
+			fi
 		fi
 	fi
 fi

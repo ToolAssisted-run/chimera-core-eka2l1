@@ -1,8 +1,34 @@
+diff --git a/src/emu/services/src/bluetooth/protocols/asker_inet.cpp b/src/emu/services/src/bluetooth/protocols/asker_inet.cpp
+index 15f880044..af2d459db 100644
+--- a/src/emu/services/src/bluetooth/protocols/asker_inet.cpp
++++ b/src/emu/services/src/bluetooth/protocols/asker_inet.cpp
+@@ -52,7 +52,7 @@ namespace eka2l1::epoc::bt {
+         // before ordering handle teardown on the loop thread.
+         alive_->store(false, std::memory_order_release);
+ 
+-        if (!libuv::default_looper->started()) {
++        if (!libuv::default_looper.started()) {
+             return;
+         }
+ 
+diff --git a/src/emu/services/src/bluetooth/protocols/btmidman_inet.cpp b/src/emu/services/src/bluetooth/protocols/btmidman_inet.cpp
+index f8ac93858..d2f8d0811 100644
+--- a/src/emu/services/src/bluetooth/protocols/btmidman_inet.cpp
++++ b/src/emu/services/src/bluetooth/protocols/btmidman_inet.cpp
+@@ -147,7 +147,7 @@ namespace eka2l1::epoc::bt {
+ 
+         send_logout(true);
+ 
+-        if (!libuv::default_looper->started()) {
++        if (!libuv::default_looper.started()) {
+             return;
+         }
+ 
 diff --git a/src/external/uvlooper/include/uvlooper/uvlooper.h b/src/external/uvlooper/include/uvlooper/uvlooper.h
-index 1efbe4d85..a2c64c612 100644
+index 1efbe4d85..7614fbcd4 100644
 --- a/src/external/uvlooper/include/uvlooper/uvlooper.h
 +++ b/src/external/uvlooper/include/uvlooper/uvlooper.h
-@@ -134,5 +134,36 @@ namespace libuv {
+@@ -134,5 +134,53 @@ namespace libuv {
          return std::nullopt;
      }
  
@@ -16,9 +42,26 @@ index 1efbe4d85..a2c64c612 100644
 +    // holds the loop in a function-local static, so every call site reads the
 +    // same loop and none of them changes.
 +    struct default_looper_proxy {
++        // The loop, built on the first call. Nothing here is thread safe
++        // beyond what a function-local static already gives, which is what
++        // the namespace-scope object it replaced offered too.
 +        static std::shared_ptr<looper> &instance() {
 +            static std::shared_ptr<looper> inst = std::make_shared<looper>(uv_default_loop());
++            built() = true;
 +            return inst;
++        }
++
++        static bool &built() {
++            static bool has_been = false;
++            return has_been;
++        }
++
++        // Whether the loop is running. Asking is NOT using: a loop nobody
++        // built has not started, and answering that must not build one -
++        // teardown paths ask this, and building a loop while tearing down
++        // opens a descriptor and a thread that nothing will ever close.
++        bool started() const {
++            return built() && instance()->started();
 +        }
 +
 +        looper *operator->() const {

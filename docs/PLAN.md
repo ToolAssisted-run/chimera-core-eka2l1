@@ -333,11 +333,32 @@ repository, needing nobody's ROM): 51 entries and 77,399 bytes land on drive C,
 identically in both flavors, and what lands there is the machine's memory - so it
 is in every savestate and every movie made from the project.
 
-Games are still not loadable. The N-Gage game-card installer unpacks an archive
-into a host staging directory and then copies it with host calls; the same
-treatment would move it onto the VFS. `.blz` needs a third-party installer app
-(BLZinstapp) run inside the machine, which needs the picture, which needs the
-S60v1 UI to come up.
+**A game card loads too, and a real game runs.** The emulator's own card installer
+unpacks an archive into a host staging directory and then copies it with host
+calls, which a machine whose drives are its own memory has no use for, so the glue
+copies the card straight out of the archive onto drive E through the VFS
+(`machine::install_card`) and lets the application scan find it. Red Faction - a
+commercial N-Gage title, as a RAR of its card - installs, registers as
+`0x101fd3d0 RedFaction`, and RUNS: 80,598,663 instructions, identical in both
+flavors, reading its own `redfaction.cfl` off drive E.
+
+Two more things the sandbox needed for it: musl's `open()` asks for O_CLOEXEC with
+a second, raw `fcntl` call that no libc-level definition can shadow, so the flag is
+stripped before the open happens; and the bluetooth teardown path asked whether the
+libuv loop had started, which through the lazy proxy BUILT one - an epoll
+descriptor and a thread, while tearing down. Asking is not using: the proxy answers
+"no" for a loop nobody built (0009), and a machine told it has no network refuses a
+socket rather than starting a loop for it (0020).
+
+**The game does not draw.** It stops in `wait_for_any_request` shortly after the
+kernel refuses `Lcd.LDD` - the N-Gage's direct-LCD logical device driver, which
+EKA2L1 does not implement (it has `videodriver`, `ekeyb`, `dhal`, `ecomm`,
+`gd1drv`, `cameraldd`). Holding a key does not wake it. That is the next thing to
+find out about, and it is upstream compatibility work rather than anything the core
+brings.
+
+`.blz` remains out of reach: it needs a third-party installer app (BLZinstapp) run
+inside the machine, which needs the picture.
 
 ## Open questions
 

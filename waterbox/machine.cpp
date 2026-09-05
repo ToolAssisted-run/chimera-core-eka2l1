@@ -4,6 +4,7 @@
 #include "input.h"
 #include "host-ui.h"
 
+#include <common/archive.h>
 #include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
@@ -47,6 +48,11 @@ namespace chimera {
         conf_->cpu_load_save = false;
         conf_->fbs_enable_compression_queue = false;
         conf_->single_thread_app_scan = true;
+        conf_->log_svc = options_.log_syscalls;
+
+        // There is no network in a sandbox, and a machine told so refuses a
+        // socket rather than building a loop with a thread in it.
+        conf_->enable_networking = false;
 
         // The keypad. The emulator's keybind table translates a source code -
         // ours, since we are the one feeding it - into a Symbian scan code, so
@@ -225,6 +231,86 @@ namespace chimera {
 
         return eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
             eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
+    }
+
+    int machine::install_card(const std::string &archive_path) {
+        std::vector<eka2l1::common::archive_entry_info> entries;
+
+        if (!eka2l1::common::list_archive(archive_path, entries)) {
+            return 0;
+        }
+
+        // The card's root is whatever holds "System": a dump is usually one
+        // folder named after the game, and sometimes the card itself.
+        std::string prefix;
+        bool found_root = false;
+
+        for (const auto &entry : entries) {
+            const std::string lowered = eka2l1::common::lowercase_string(entry.path);
+            const std::size_t at = lowered.find("system/");
+
+            if ((at == std::string::npos) || (at != 0 && lowered[at - 1] != '/')) {
+                continue;
+            }
+
+            prefix = entry.path.substr(0, at);
+            found_root = true;
+            break;
+        }
+
+        if (!found_root) {
+            return 0;
+        }
+
+        eka2l1::io_system *io = sys_->get_io_system();
+        int written = 0;
+
+        for (const auto &entry : entries) {
+            if (entry.is_directory || (entry.path.compare(0, prefix.size(), prefix) != 0)) {
+                continue;
+            }
+
+            const std::string relative = entry.path.substr(prefix.size());
+
+            if (relative.empty()) {
+                continue;
+            }
+
+            std::vector<char> content;
+
+            if (!eka2l1::common::read_archive_entry(archive_path, entry.path, content)) {
+                continue;
+            }
+
+            // Symbian spells its paths with backslashes, and the card goes on
+            // the removable drive, which is where a game card is.
+            std::string target = "E:\\" + relative;
+
+            for (char &c : target) {
+                if (c == '/') {
+                    c = '\\';
+                }
+            }
+
+            const std::u16string wide = eka2l1::common::utf8_to_ucs2(target);
+
+            io->create_directories(eka2l1::common::utf8_to_ucs2(eka2l1::file_directory(target)));
+
+            std::unique_ptr<eka2l1::file> out = io->open_file(wide, WRITE_MODE | BIN_MODE);
+
+            if (!out) {
+                continue;
+            }
+
+            if (!content.empty()) {
+                out->write_file(content.data(), 1, static_cast<std::uint32_t>(content.size()));
+            }
+
+            out->close();
+            written++;
+        }
+
+        return written;
     }
 
     int machine::install_package(const std::string &path) {

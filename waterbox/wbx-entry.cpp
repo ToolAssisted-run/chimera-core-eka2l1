@@ -133,12 +133,27 @@ ECL_EXPORT int Init(void) {
         // machine's own drive C, which lives in the machine's memory and
         // therefore in its savestates.
         char slot_name[256] = { 0 };
+        const char *game = nullptr;
 
         if (wbx_slot_name(GAME_SLOT, 0, slot_name, sizeof slot_name) != nullptr) {
-            g_installed = g_machine->install_package(slot_name);
+            game = slot_name;
         } else if (std::FILE *plain = std::fopen(GAME_SLOT, "rb")) {
             std::fclose(plain);
-            g_installed = g_machine->install_package(GAME_SLOT);
+            game = GAME_SLOT;
+        }
+
+        if (game != nullptr) {
+            // A game card first - an archive holding a System\Apps tree - and
+            // a Symbian package if it is not one.
+            const int card_files = g_machine->install_card(game);
+
+            if (card_files > 0) {
+                g_installed = 0;
+
+                g_machine->sys()->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
+            } else {
+                g_installed = g_machine->install_package(game);
+            }
         }
 
         g_device = true;

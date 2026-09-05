@@ -85,6 +85,8 @@ int main(int argc, char **argv) {
     std::string probe_path;
     std::string rom_only_path;
     std::string install_path;
+    std::string card_path;
+    int press_button = -1;
     bool print_rom_path = false;
     bool verbose = false;
     bool gpu = false;
@@ -107,6 +109,10 @@ int main(int argc, char **argv) {
             options.host_clock = true;
         } else if ((std::strcmp(argv[i], "--probe") == 0) && has_value) {
             probe_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--press") == 0) && has_value) {
+            press_button = std::atoi(argv[++i]);
+        } else if ((std::strcmp(argv[i], "--card") == 0) && has_value) {
+            card_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--install") == 0) && has_value) {
             install_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--rom-only") == 0) && has_value) {
@@ -117,6 +123,9 @@ int main(int argc, char **argv) {
             screen_out = argv[++i];
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
+        } else if (std::strcmp(argv[i], "--log-svc") == 0) {
+            verbose = true;
+            options.log_syscalls = true;
         } else if (std::strcmp(argv[i], "--print-rom-path") == 0) {
             print_rom_path = true;
         } else if (std::strcmp(argv[i], "--list-apps") == 0) {
@@ -229,17 +238,6 @@ int main(int argc, char **argv) {
 
             std::printf("boot: ok\n");
 
-            // How many applications the machine found. It is the shortest
-            // statement that its filesystem works, whichever one is serving it.
-            if (eka2l1::kernel_system *kern = machine.sys()->get_kernel_system()) {
-                eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
-                    kern->get_by_name<eka2l1::service::server>(
-                        eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
-
-                if (applist) {
-                    std::printf("apps: %zu\n", applist->get_registerations().size());
-                }
-            }
         }
     }
 
@@ -254,6 +252,24 @@ int main(int argc, char **argv) {
             eka2l1::common::utf8_to_ucs2(install_path), drive_c);
 
         std::printf("install: %d\n", result);
+    }
+
+    if (!card_path.empty()) {
+        if (drives) {
+            // Straight from the archive onto the machine's own drive E.
+            std::printf("card: %d files\n", machine.install_card(card_path));
+        } else {
+            // The emulator's own installer, which wants directories on a host.
+            std::string found;
+
+            const eka2l1::ngage_game_card_install_error result = machine.sys()->install_ngage_game_card(
+                card_path, [&found](std::string name) { found = std::move(name); }, nullptr);
+
+            std::printf("card: %d %s\n", static_cast<int>(result), found.c_str());
+        }
+
+        // The drive changed under the application list's feet.
+        machine.sys()->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
     }
 
     if (print_rom_path) {
@@ -400,6 +416,16 @@ int main(int argc, char **argv) {
     std::uint64_t loops = 0;
 
     for (int i = 0; i < frames; i++) {
+        // A key held for a moment in the middle of the run: the shortest way
+        // to ask whether a machine that has gone quiet is waiting for input.
+        if (press_button >= 0) {
+            if (i == frames / 3) {
+                machine.set_button(press_button, true);
+            } else if (i == frames / 3 + 6) {
+                machine.set_button(press_button, false);
+            }
+        }
+
         loops += machine.run_for_us(slice_us);
 
         if (sleep_ms > 0) {
@@ -436,6 +462,18 @@ int main(int argc, char **argv) {
             if (!screen_out.empty()) {
                 write_tga(screen_out.c_str(), screen.data(), width, height);
             }
+        }
+    }
+
+    // How many applications the machine has, counted after everything the run
+    // installed - which is where the sandbox counts them too.
+    if (eka2l1::kernel_system *kern = machine.sys()->get_kernel_system()) {
+        eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
+            kern->get_by_name<eka2l1::service::server>(
+                eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+
+        if (applist) {
+            std::printf("apps: %zu\n", applist->get_registerations().size());
         }
     }
 
