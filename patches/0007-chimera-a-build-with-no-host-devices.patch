@@ -1,0 +1,136 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index aa795a834..bfb08c08e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -22,6 +22,13 @@ option(EKA2L1_ENABLE_SCRIPTING_ABILITY "Enable to script with Python or Lua" ON)
+ option(EKA2L1_SCRIPTING_LUA "Use the LuaJIT runtime for scripting. When OFF, only the built-in native patches are compiled (no runtime script loading)." ON)
+ option(EKA2L1_ENABLE_UNEXPECTED_EXCEPTION_HANDLER "Enable EKA2L1 to dump unexpected exception" OFF)
+ option(EKA2L1_BUILD_VULKAN_BACKEND "Build Vulkan backend" OFF)
++option(EKA2L1_HOST_DEVICES "Build the backends that talk to host devices: the window system, SDL2 input and vibration. A build with none of them has no window and no real controllers, and its drivers come from the embedder." ON)
++
++# One option, one macro: the sources that pick a backend at compile time need
++# to know, and there is no platform macro that means "no platform".
++if (NOT EKA2L1_HOST_DEVICES)
++    add_definitions(-DEKA2L1_NO_HOST_DEVICES=1)
++endif()
+ option(EKA2L1_DEPLOY_DMG "Deploy EKA2L1 as .dmg" OFF)
+ option(EKA2L1_BUILD_PATCH "Enable building Symbian's DLL patches using Symbian SDK" OFF)
+ option(EKA2L1_ENABLE_DISCORD_RICH_PRESENCE "Enable support for Discord Rich Presence" OFF)
+diff --git a/src/emu/drivers/CMakeLists.txt b/src/emu/drivers/CMakeLists.txt
+index b27f49113..241166bfb 100644
+--- a/src/emu/drivers/CMakeLists.txt
++++ b/src/emu/drivers/CMakeLists.txt
+@@ -149,6 +149,9 @@ elseif (EKA2L1_IOS)
+         src/camera/backend/ios/camera_simulator.mm
+         src/sensor/backend/ios/sensor_ios.h
+         src/sensor/backend/ios/sensor_ios.mm)
++elseif (NOT EKA2L1_HOST_DEVICES)
++    # Nothing: no window to open, no controller to poll, nothing to vibrate.
++    # The iOS branch above already shows the emulator builds without them.
+ else()
+     target_sources(drivers PRIVATE
+         include/drivers/input/backend/emu_controller_sdl2.h
+@@ -211,6 +214,9 @@ elseif(ANDROID)
+         src/graphics/backend/context_egl_android.cpp
+         src/graphics/backend/context_egl_android.h
+     )
++elseif (NOT EKA2L1_HOST_DEVICES)
++    # No window system, so no context to create one against. A build like this
++    # gets its GL context from whatever embeds it.
+ else()
+     find_package(X11 REQUIRED)
+     find_package(OpenGL REQUIRED)
+@@ -270,7 +276,7 @@ if (EKA2L1_HAVE_FFMPEG)
+ endif()
+ if (ANDROID)
+     target_link_libraries(drivers PRIVATE android)
+-elseif (NOT EKA2L1_IOS)
++elseif (NOT EKA2L1_IOS AND EKA2L1_HOST_DEVICES)
+     target_link_libraries(drivers PRIVATE SDL2)
+ endif()
+ 
+diff --git a/src/emu/drivers/src/graphics/context.cpp b/src/emu/drivers/src/graphics/context.cpp
+index f69f920e5..7f130ffa0 100644
+--- a/src/emu/drivers/src/graphics/context.cpp
++++ b/src/emu/drivers/src/graphics/context.cpp
+@@ -20,7 +20,15 @@
+ #include <drivers/graphics/context.h>
+ #include <common/platform.h>
+ 
+-#if EKA2L1_PLATFORM(WIN32)
++// A build with no host devices has no window system, so there is no context to
++// make: the embedder brings its own.
++#if !defined(EKA2L1_NO_HOST_DEVICES)
++#define EKA2L1_NO_HOST_DEVICES 0
++#endif
++
++#if EKA2L1_NO_HOST_DEVICES
++// no backend
++#elif EKA2L1_PLATFORM(WIN32)
+ #include "backend/context_wgl.h"
+ #elif EKA2L1_PLATFORM(IOS)
+ #include "backend/context_eagl.h"
+@@ -38,7 +46,13 @@ namespace eka2l1::drivers::graphics {
+         {{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0}, {3, 3}, {3, 2}, {3, 1}, {3, 0} }};
+ 
+     std::unique_ptr<gl_context> make_gl_context(const drivers::window_system_info &system_info, const bool stereo, const bool core) {
+-#if EKA2L1_PLATFORM(WIN32)
++#if EKA2L1_NO_HOST_DEVICES
++        (void)system_info;
++        (void)stereo;
++        (void)core;
++
++        return nullptr;
++#elif EKA2L1_PLATFORM(WIN32)
+         return std::make_unique<gl_context_wgl>(system_info, stereo, core);
+ #elif EKA2L1_PLATFORM(IOS)
+         return std::make_unique<gl_context_eagl>(system_info, stereo, core);
+diff --git a/src/emu/drivers/src/hwrm/vibration.cpp b/src/emu/drivers/src/hwrm/vibration.cpp
+index 9740a7b33..54f5b168c 100644
+--- a/src/emu/drivers/src/hwrm/vibration.cpp
++++ b/src/emu/drivers/src/hwrm/vibration.cpp
+@@ -19,7 +19,15 @@
+ 
+ #include <common/platform.h>
+ #include <drivers/hwrm/backend/vibration_null.h>
+-#if EKA2L1_PLATFORM(ANDROID)
++
++// A build with no host devices has nothing to vibrate, and no SDL2 to ask.
++#if !defined(EKA2L1_NO_HOST_DEVICES)
++#define EKA2L1_NO_HOST_DEVICES 0
++#endif
++
++#if EKA2L1_NO_HOST_DEVICES
++// the null vibrator above is the whole backend
++#elif EKA2L1_PLATFORM(ANDROID)
+ #include <drivers/hwrm/backend/vibration_jdk.h>
+ #elif EKA2L1_PLATFORM(IOS)
+ #include <drivers/hwrm/backend/vibration_ios.h>
+@@ -29,7 +37,9 @@
+ 
+ namespace eka2l1::drivers::hwrm {
+     std::unique_ptr<vibrator> make_suitable_vibrator() {
+-#if EKA2L1_PLATFORM(ANDROID)
++#if EKA2L1_NO_HOST_DEVICES
++        return std::make_unique<vibrator_null>();
++#elif EKA2L1_PLATFORM(ANDROID)
+         return std::make_unique<vibrator_jdk>();
+ #elif EKA2L1_PLATFORM(IOS)
+         return std::make_unique<vibrator_ios>();
+diff --git a/src/external/CMakeLists.txt b/src/external/CMakeLists.txt
+index f9185e92b..ea72347d0 100644
+--- a/src/external/CMakeLists.txt
++++ b/src/external/CMakeLists.txt
+@@ -423,7 +423,11 @@ set (TSF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "TSF include path")
+ 
+ # SDL2
+ # Can't believe in 2022 the official CMake can't still ship a FindSDL2 with the program...
+-if (NOT ANDROID AND NOT EKA2L1_IOS)
++if (NOT EKA2L1_HOST_DEVICES)
++    # No window, no game controllers: nothing links against it, but the target
++    # has to exist for the ones that name it.
++    add_library(SDL2 INTERFACE)
++elseif (NOT ANDROID AND NOT EKA2L1_IOS)
+     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/sdl2-cmake-scripts")
+ 
+     if(APPLE)

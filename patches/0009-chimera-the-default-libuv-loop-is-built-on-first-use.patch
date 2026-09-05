@@ -1,0 +1,55 @@
+diff --git a/src/external/uvlooper/include/uvlooper/uvlooper.h b/src/external/uvlooper/include/uvlooper/uvlooper.h
+index 1efbe4d85..a2c64c612 100644
+--- a/src/external/uvlooper/include/uvlooper/uvlooper.h
++++ b/src/external/uvlooper/include/uvlooper/uvlooper.h
+@@ -134,5 +134,36 @@ namespace libuv {
+         return std::nullopt;
+     }
+ 
+-    extern std::shared_ptr<looper> default_looper;
++    // The default loop, built the first time something asks for it.
++    //
++    // It used to be a namespace-scope shared_ptr, which meant every process
++    // linking this opened an epoll descriptor before main - a test, a tool, a
++    // build with no networking at all - and a host whose sandbox has no epoll
++    // could not start the program even to say so. This proxy is stateless and
++    // holds the loop in a function-local static, so every call site reads the
++    // same loop and none of them changes.
++    struct default_looper_proxy {
++        static std::shared_ptr<looper> &instance() {
++            static std::shared_ptr<looper> inst = std::make_shared<looper>(uv_default_loop());
++            return inst;
++        }
++
++        looper *operator->() const {
++            return instance().get();
++        }
++
++        looper &operator*() const {
++            return *instance();
++        }
++
++        operator std::shared_ptr<looper>() const {
++            return instance();
++        }
++
++        explicit operator bool() const {
++            return static_cast<bool>(instance());
++        }
++    };
++
++    extern default_looper_proxy default_looper;
+ }
+\ No newline at end of file
+diff --git a/src/external/uvlooper/src/uvlooper.cpp b/src/external/uvlooper/src/uvlooper.cpp
+index 8a2bfa887..52fbeb700 100644
+--- a/src/external/uvlooper/src/uvlooper.cpp
++++ b/src/external/uvlooper/src/uvlooper.cpp
+@@ -212,5 +212,5 @@ namespace libuv {
+         }
+     }
+ 
+-    extern std::shared_ptr<looper> default_looper = std::make_shared<looper>(uv_default_loop());
++    default_looper_proxy default_looper;
+ }
+\ No newline at end of file

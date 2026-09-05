@@ -150,13 +150,16 @@ networking, no real audio or input devices.
   over a second of emulated time: 999 firings, none of them late, identical with the
   host stalled 5 ms every frame - and the same machine left on the host clock does
   notice that stall, which is what says the check has teeth. One host thread.
-- **M2 - the machine runs. The native half is DONE 2026-09-05**: the ROM installs as a
+- **M2 - the machine runs. DONE 2026-09-05, both flavors.** The native half: the ROM installs as a
   device (`waterbox/install-device`, provisioning, outside the machine), drive Z, C, D
   and E mount, the application list scans, and the machine's own menu launches through
   its registration and executes 681,873 ARM instructions in a second of emulated time -
-  the same 681,873 every run, and the same with the host stalled 3 ms a frame. What
-  remains is the sandbox: the guest toolchain build, the syscall gaps, and the directory
-  watcher's thread. Proof: native == sandbox on a memory digest over N frames.
+  the same 681,873 every run, and the same with the host stalled 3 ms a frame. The
+  sandbox half: the whole emulator - 250k lines and 40 vendored libraries - compiles
+  under the miniBox musl toolchain with two more patches, `core.wbx` links and passes
+  check-wbx, and it runs the same workload as the native reference to the microsecond.
+  What the sandbox still lacks is a filesystem: the device dump cannot reach the machine
+  inside the box yet, so what runs there is the empty machine. That is M3's first job.
 - **M3 - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
@@ -168,6 +171,30 @@ networking, no real audio or input devices.
   dump, the bundle for what the device writes, default keybinds, the licence manifest.
 - **M7 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
   upstream's own differential harness.
+
+## What the sandbox needed (M2, 2026-09-05)
+
+- **Two more patches.** 0007 (`EKA2L1_HOST_DEVICES`) leaves out the backends that talk
+  to host devices - SDL2 input and vibration, the GLX/EGL/Wayland contexts - which the
+  iOS branch had already shown the emulator can do without; the two shared sources that
+  pick a backend at compile time needed a case for "no platform". 0009 makes the default
+  libuv loop lazy: it was a namespace-scope `shared_ptr` built before `main`, so every
+  process linking uvlooper opened an epoll descriptor it never used, and a sandbox with
+  no epoll could not even start the program to say so.
+- **FFmpeg is off for both flavors** (0008). The submodule ships PREBUILT libraries per
+  desktop platform, built against the host's C library, which a musl guest cannot link.
+  Rather than let native and sandbox decode differently, neither decodes until the guest
+  has an FFmpeg of its own - the rpcs3 recipe, when a game asks for sound or video.
+- **Logging is compiled out of the guest** (`DISABLE_LOGGING`, upstream's own switch).
+  It removes the log file the emulator otherwise writes into the working directory, and
+  with it the sink that would have thrown when that write failed.
+- **Five libc gaps** in `waterbox/guest-syscalls.cpp`, each found by the sandbox naming
+  the syscall it would not serve: `closefrom` (libarchive, before an exec that cannot
+  happen), `clock_getres` (libstdc++'s chrono, before anything else runs), `getcwd`, and
+  the directory calls the emulator lays its storage root out with (`mkdir`, `mkdirat`,
+  `rmdir`, `chdir`, `chmod`, `umask`). The sandbox holds a flat set of mounted files, so
+  the directory calls answer success and every name resolves to a mounted file or to
+  nothing.
 
 ## Open questions
 

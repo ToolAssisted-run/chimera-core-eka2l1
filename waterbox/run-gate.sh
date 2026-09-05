@@ -91,6 +91,34 @@ else
 	echo "FAIL threads: $threads (the timer thread is back)"; fail=$((fail + 1))
 fi
 
+# ---- the same machine, inside the sandbox ----------------------------------
+# core.wbx runs the identical workload through the miniBox host. Every number
+# comes from the machine, so native and sandbox must agree exactly; a
+# difference here is the sandbox changing the emulator, which is the one thing
+# a waterboxed core may never do.
+core="$here/bin/core.wbx"
+rw="$here/bin/run-wbx"
+digest='^(frames|virtual us|instructions|timer fired|timer last|timer lateness):'
+
+if [ ! -x "$rw" ] || [ ! -f "$core" ]; then
+	echo "SKIP sandbox: core.wbx not built (./waterbox/build-guest.sh && ./waterbox/build-core.sh)"
+else
+	nat="$(run | grep -E "$digest")"
+	box="$(timeout 600 "$rw" "$core" --frames 60 2>&1 | grep -E "$digest")"
+
+	if [ -z "$box" ]; then
+		echo "FAIL sandbox (no output)"; fail=$((fail + 1))
+	elif [ "$nat" != "$box" ]; then
+		echo "FAIL sandbox (native vs sandbox)"
+		echo "$nat" > "$work/native.txt"
+		echo "$box" > "$work/sandbox.txt"
+		diff "$work/native.txt" "$work/sandbox.txt" | head -20; fail=$((fail + 1))
+	else
+		echo "PASS sandbox: native == sandbox ($(echo "$box" | grep 'timer fired'))"
+		pass=$((pass + 1))
+	fi
+fi
+
 # ---- a real device, and real Symbian code ----------------------------------
 # Only when the user's own ROM is here. It is never committed, and the gate
 # says so rather than failing when it is absent.

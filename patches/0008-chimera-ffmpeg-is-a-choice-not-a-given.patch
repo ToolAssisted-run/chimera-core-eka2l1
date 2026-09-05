@@ -1,0 +1,28 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bfb08c08e..fe111cdd1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -37,6 +37,7 @@ option(EKA2L1_ENABLE_QT_CAMERA "Build the desktop camera backend on Qt Multimedi
+ # Runtime sanitizer for debugging builds: "address" (ASan, memory errors) or
+ # "thread" (TSan, data races and lock-order inversions). Empty disables both.
+ # They are mutually exclusive -- the shadow memory layouts conflict.
++option(EKA2L1_BUILD_FFMPEG "Link the bundled FFmpeg. The submodule ships PREBUILT libraries for each desktop platform, so a build for a C library other than the one they were made against has to do without it: no video playback, and the FFmpeg audio decoders and DSP are gone." ON)
+ set(EKA2L1_SANITIZER "" CACHE STRING "Runtime sanitizer to build with: address, thread, or empty")
+ set_property(CACHE EKA2L1_SANITIZER PROPERTY STRINGS "" "address" "thread")
+ 
+diff --git a/src/external/CMakeLists.txt b/src/external/CMakeLists.txt
+index ea72347d0..e895ea5ed 100644
+--- a/src/external/CMakeLists.txt
++++ b/src/external/CMakeLists.txt
+@@ -301,7 +301,10 @@ endif()
+ 
+ 
+ # FFMPEG
+-if (EKA2L1_IOS)
++if (NOT EKA2L1_BUILD_FFMPEG)
++    set(EKA2L1_HAVE_FFMPEG OFF CACHE INTERNAL "FFmpeg is available for this build" FORCE)
++    add_library(ffmpeg INTERFACE)
++elseif (EKA2L1_IOS)
+     option(EKA2L1_IOS_ENABLE_FFMPEG "Link iOS builds against a prebuilt bundled FFmpeg output" OFF)
+     # The ffmpeg submodule ships prebuilt libraries for the desktop platforms and
+     # Android, but not for iOS: its ios-build.sh produces them into ios/<slice>.
