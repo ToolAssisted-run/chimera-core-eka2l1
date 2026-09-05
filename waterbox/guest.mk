@@ -26,11 +26,11 @@ EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/
         -I$(EKA)/emu/package/include -I$(EKA)/emu/services/include -I$(EKA)/emu/disasm/include \
         -I$(EKA)/emu/cpu/include -I$(EKA)/emu/bridge/include -I$(EKA)/emu/loader/include \
         -I$(EKA)/external/fmt/include -I$(EKA)/external/spdlog/include -I$(EKA)/external/yaml-cpp/include \
-        -I$(EKA)/external/glm -I$(EKA)/external -I$(EKA)/external/xxHash -I$(EKA)/external/capstone/include
+        -I$(EKA)/external/glm -I$(EKA)/external -I$(EKA)/external/xxHash -I$(EKA)/external/capstone/include -I$(EKA)/external/thread-pool/include
 
 CXXFLAGS := $(WBFLAGS) $(MBINCS) $(EKAINCS) -I. $(CXXINCS)
 
-OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/host-ui.o $(O)/guest-syscalls.o
+OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/host-ui.o $(O)/guest-syscalls.o
 
 all: $(OBJS)
 

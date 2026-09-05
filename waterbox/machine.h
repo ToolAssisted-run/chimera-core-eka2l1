@@ -35,6 +35,10 @@ namespace chimera {
         // the wall really does answer differently when the wall is stalled, and
         // that the check for it has teeth.
         bool host_clock = false;
+
+        // The drives come from the machine's own memory rather than from
+        // directories on a host: the sandbox has neither. See memfs.h.
+        bool in_memory_drives = false;
     };
 
     // The emulator, its clock, and the loop that drives both. Everything a core
@@ -55,7 +59,9 @@ namespace chimera {
 
         // Everything the frontend's stage two does that a machine needs: the
         // drives mounted, the user-side servers created, the package registry
-        // read. Call it after a device is set and before stepping.
+        // read. Call it after a device is set and before stepping. With
+        // in_memory_drives the mounting is the caller's - it has already been
+        // done, against a filesystem the caller owns.
         void boot();
 
         // Runs the machine until its own clock has moved `us` forward. Returns
@@ -72,6 +78,8 @@ namespace chimera {
         }
 
     private:
+        void mount_host_drives();
+
         machine_options options_;
         virtual_clock clock_;
 

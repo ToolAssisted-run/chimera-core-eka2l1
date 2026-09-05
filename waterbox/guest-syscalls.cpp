@@ -98,3 +98,12 @@ mode_t umask(mode_t mask) {
     return 0;
 }
 }
+
+extern "C" {
+
+// The sandbox serves stat but not lstat, and there are no symbolic links in a
+// flat list of mounted files: asking about the link is asking about the file.
+int lstat(const char *path, struct stat *out) {
+    return stat(path, out);
+}
+}

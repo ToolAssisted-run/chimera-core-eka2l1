@@ -1,0 +1,282 @@
+diff --git a/src/emu/common/include/common/dynamicfile.h b/src/emu/common/include/common/dynamicfile.h
+index 3719e0542..09a7cf2d1 100644
+--- a/src/emu/common/include/common/dynamicfile.h
++++ b/src/emu/common/include/common/dynamicfile.h
+@@ -21,6 +21,8 @@
+ #pragma once
+ 
+ #include <fstream>
++#include <memory>
++#include <sstream>
+ #include <string>
+ 
+ namespace eka2l1::common {
+@@ -34,12 +36,24 @@ namespace eka2l1::common {
+      * are saved as an UCS2 file.
+      */
+     class dynamic_ifile {
+-        std::ifstream stream_;
++        std::unique_ptr<std::istream> owned_;
++        std::istream *stream_;
+         int ucs2_;
+ 
++        void read_byte_order_mark();
++
+     public:
+         explicit dynamic_ifile(const std::string &name);
+ 
++        /**
++         * \brief Read from bytes already in memory.
++         *
++         * The file may not be one the host has: a device's files can be served
++         * from an archive, or from an emulated filesystem with no host path at
++         * all, and the reader should not have to care which.
++         */
++        explicit dynamic_ifile(const std::string &contents, bool);
++
+         /**
+          * \brief Read a line to an 8-bit string
+          *
+@@ -61,11 +75,11 @@ namespace eka2l1::common {
+         void seek(int mode, const std::size_t offset);
+ 
+         bool eof() {
+-            return stream_.eof();
++            return stream_->eof();
+         }
+ 
+         bool fail() {
+-            return stream_.fail();
++            return stream_->fail();
+         }
+ 
+         void set_ucs2(int ucs2) {
+diff --git a/src/emu/common/include/common/ini.h b/src/emu/common/include/common/ini.h
+index 093216d6c..f9d4af68a 100644
+--- a/src/emu/common/include/common/ini.h
++++ b/src/emu/common/include/common/ini.h
+@@ -309,6 +309,17 @@ namespace eka2l1::common {
+         */
+         int load(const char *path, bool ignore_spaces = true);
+ 
++        /*! \brief Load an ini file whose bytes are already in hand.
++         *
++         * Same result as load(), for a file that has no path on the host.
++        */
++        int load_from_memory(const std::string &contents, bool ignore_spaces = true);
++
++    private:
++        int parse(class dynamic_ifile &ifile, bool ignore_spaces);
++
++    public:
++
+         /*! \brief Save an ini file
+         */
+         // void save(const char *path);
+diff --git a/src/emu/common/src/dynamicfile.cpp b/src/emu/common/src/dynamicfile.cpp
+index d8fc9b81f..df8b98622 100644
+--- a/src/emu/common/src/dynamicfile.cpp
++++ b/src/emu/common/src/dynamicfile.cpp
+@@ -30,17 +30,28 @@ namespace eka2l1::common {
+     dynamic_ifile::dynamic_ifile(const std::string &name)
+ #if EKA2L1_PLATFORM(WIN32)
+ #if defined(_MSC_VER)
+-        : stream_(common::utf8_to_wstr(name), std::ios::binary) {
++        : owned_(std::make_unique<std::ifstream>(common::utf8_to_wstr(name), std::ios::binary))
+ #else
+-        : stream_(std::filesystem::path(common::utf8_to_wstr(name)), std::ios::binary) {
++        : owned_(std::make_unique<std::ifstream>(std::filesystem::path(common::utf8_to_wstr(name)), std::ios::binary))
+ #endif
+ #else
+-        : stream_(name, std::ios::binary) {
++        : owned_(std::make_unique<std::ifstream>(name, std::ios::binary))
+ #endif
++        , stream_(owned_.get()) {
++        read_byte_order_mark();
++    }
++
++    dynamic_ifile::dynamic_ifile(const std::string &contents, bool)
++        : owned_(std::make_unique<std::istringstream>(contents, std::ios::binary))
++        , stream_(owned_.get()) {
++        read_byte_order_mark();
++    }
++
++    void dynamic_ifile::read_byte_order_mark() {
+         // Read the POM
+         std::uint16_t pom = 0;
+ 
+-        stream_.read(reinterpret_cast<char *>(&pom), sizeof(pom));
++        stream_->read(reinterpret_cast<char *>(&pom), sizeof(pom));
+ 
+         if (pom == 0xFEFF) {
+             // Little-endian
+@@ -50,7 +61,8 @@ namespace eka2l1::common {
+             ucs2_ = 1;
+         } else {
+             ucs2_ = -1;
+-            stream_.seekg(0, std::ios::beg);
++            stream_->clear();
++            stream_->seekg(0, std::ios::beg);
+         }
+     }
+ 
+@@ -66,20 +78,20 @@ namespace eka2l1::common {
+         }
+ 
+         // Read it until we get a newline
+-        return bool(std::getline(stream_, line));
++        return bool(std::getline(*stream_, line));
+     }
+ 
+     bool dynamic_ifile::getline(std::u16string &line) {
+         if (ucs2_ == -1) {
+             std::string line_utf8;
+-            bool result(std::getline(stream_, line_utf8));
++            bool result(std::getline(*stream_, line_utf8));
+ 
+             line = common::utf8_to_ucs2(line_utf8);
+ 
+             return result;
+         }
+ 
+-        if (stream_.fail() || stream_.eof()) {
++        if (stream_->fail() || stream_->eof()) {
+             return false;
+         }
+ 
+@@ -90,14 +102,14 @@ namespace eka2l1::common {
+             char hi = 0;
+ 
+             if (ucs2_ == 1) {
+-                stream_.read(&hi, 1);
+-                stream_.read(&lo, 1);
++                stream_->read(&hi, 1);
++                stream_->read(&lo, 1);
+             } else {
+-                stream_.read(&lo, 1);
+-                stream_.read(&hi, 1);
++                stream_->read(&lo, 1);
++                stream_->read(&hi, 1);
+             }
+ 
+-            if ((static_cast<char16_t>((hi << 8) | lo) == u'\n') || (stream_.fail()) || (stream_.eof())) {
++            if ((static_cast<char16_t>((hi << 8) | lo) == u'\n') || (stream_->fail()) || (stream_->eof())) {
+                 return true;
+             }
+ 
+@@ -109,7 +121,7 @@ namespace eka2l1::common {
+ 
+     void dynamic_ifile::read(std::string &line, const std::size_t len) {
+         if (ucs2_ < 0) {
+-            stream_.read(&line[0], len);
++            stream_->read(&line[0], len);
+             return;
+         }
+ 
+@@ -125,7 +137,7 @@ namespace eka2l1::common {
+             std::string d;
+             d.resize(len);
+ 
+-            stream_.read(&d[0], len);
++            stream_->read(&d[0], len);
+             line = common::utf8_to_ucs2(d);
+         }
+ 
+@@ -136,18 +148,18 @@ namespace eka2l1::common {
+             char hi = 0;
+ 
+             if (ucs2_ == 1) {
+-                stream_.read(&hi, 1);
+-                stream_.read(&lo, 1);
++                stream_->read(&hi, 1);
++                stream_->read(&lo, 1);
+             } else {
+-                stream_.read(&lo, 1);
+-                stream_.read(&hi, 1);
++                stream_->read(&lo, 1);
++                stream_->read(&hi, 1);
+             }
+ 
+             if (static_cast<char16_t>((hi << 8) | lo) == u'\n') {
+                 break;
+             }
+ 
+-            if (stream_.fail() || stream_.eof()) {
++            if (stream_->fail() || stream_->eof()) {
+                 return;
+             }
+ 
+@@ -169,11 +181,11 @@ namespace eka2l1::common {
+         if (ucs2_ >= 0) {
+             // Append 2 to skip POM
+             // offset * 2 because it's an ucs2 file (4 bytes / character)
+-            stream_.seekg(2 + offset * 2, dir);
++            stream_->seekg(2 + offset * 2, dir);
+             return;
+         }
+ 
+-        stream_.seekg(offset, dir);
++        stream_->seekg(offset, dir);
+         return;
+     }
+ }
+\ No newline at end of file
+diff --git a/src/emu/common/src/ini.cpp b/src/emu/common/src/ini.cpp
+index ffd7deddc..820aa5465 100644
+--- a/src/emu/common/src/ini.cpp
++++ b/src/emu/common/src/ini.cpp
+@@ -376,6 +376,20 @@ namespace eka2l1::common {
+             return -1;
+         }
+ 
++        return parse(ifile, ignore_spaces);
++    }
++
++    int ini_file::load_from_memory(const std::string &contents, bool ignore_spaces) {
++        common::dynamic_ifile ifile(contents, true);
++
++        if (ifile.fail()) {
++            return -1;
++        }
++
++        return parse(ifile, ignore_spaces);
++    }
++
++    int ini_file::parse(common::dynamic_ifile &ifile, bool ignore_spaces) {
+         ini_section *sec = reinterpret_cast<ini_section *>(this);
+         std::string line;
+ 
+diff --git a/src/emu/services/src/window/window.cpp b/src/emu/services/src/window/window.cpp
+index fed4de8eb..9fe249e98 100644
+--- a/src/emu/services/src/window/window.cpp
++++ b/src/emu/services/src/window/window.cpp
+@@ -1347,16 +1347,24 @@ namespace eka2l1 {
+         wsini_path += static_cast<char16_t>(static_cast<char>(rom_drive) + 'A');
+         wsini_path += u":\\system\\data\\wsini.ini";
+ 
+-        auto wsini_path_host = io->get_raw_path(wsini_path);
++        // Read it through the machine's own filesystem. The ROM drive does not
++        // have to be a directory on the host: it can be served from an archive,
++        // or from memory, and then there is no host path to hand to a loader.
++        int err = -1;
+ 
+-        if (!wsini_path_host) {
++        if (symfile wsini_file = io->open_file(wsini_path, READ_MODE | BIN_MODE)) {
++            std::string contents(static_cast<std::size_t>(wsini_file->size()), '\0');
++
++            if (!contents.empty()) {
++                wsini_file->read_file(contents.data(), static_cast<std::uint32_t>(contents.size()), 1);
++            }
++
++            err = ws_config.load_from_memory(contents);
++        } else {
+             LOG_ERROR(SERVICE_WINDOW, "Can't find the window config file, app using window server will broken");
+             return;
+         }
+ 
+-        std::string wsini_path_host_utf8 = common::ucs2_to_utf8(*wsini_path_host);
+-        int err = ws_config.load(wsini_path_host_utf8.c_str());
+-
+         if (err != 0) {
+             LOG_ERROR(SERVICE_WINDOW, "Loading wsini file broke with code {}", err);
+         }

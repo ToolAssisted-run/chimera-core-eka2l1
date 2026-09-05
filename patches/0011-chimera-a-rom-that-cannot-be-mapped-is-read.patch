@@ -1,0 +1,65 @@
+diff --git a/src/emu/kernel/src/kernel.cpp b/src/emu/kernel/src/kernel.cpp
+index 1fa514727..c57677142 100644
+--- a/src/emu/kernel/src/kernel.cpp
++++ b/src/emu/kernel/src/kernel.cpp
+@@ -1374,6 +1374,21 @@ namespace eka2l1 {
+         return thr_sch_->should_terminate();
+     }
+ 
++    // Reads a file whole into memory somebody else owns. The fallback for a
++    // host that cannot map files.
++    static bool read_whole_file(const std::string &path, void *into, const std::size_t size) {
++        FILE *f = common::open_c_file(path, "rb");
++
++        if (!f) {
++            return false;
++        }
++
++        const std::size_t read = fread(into, 1, size, f);
++        fclose(f);
++
++        return read == size;
++    }
++
+     bool kernel_system::map_rom(const mem::vm_address addr, const std::string &path) {
+         const std::size_t rom_size = common::file_size(path);
+ 
+@@ -1391,7 +1406,19 @@ namespace eka2l1 {
+             rom_map_size_ = 0;
+ 
+             if (!rom_map_) {
+-                return false;
++                // Not every host can map a file into memory - a sandbox that
++                // serves files but has no file-backed mapping cannot - and the
++                // ROM is small enough to read. The bookkeeping is the same as
++                // the rebased branch below: a non-zero rom_map_size_ is what
++                // tells unmap_rom this is memory rather than a mapping.
++                rom_map_ = common::map_memory(rom_size);
++                rom_map_size_ = rom_size;
++
++                if (!rom_map_ || !common::commit(rom_map_, rom_map_size_, prot_read_write)
++                    || !read_whole_file(path, rom_map_, rom_size)) {
++                    unmap_rom();
++                    return false;
++                }
+             }
+         } else {
+             LOG_INFO(KERNEL, "ROM base 0x{:X} is not chunk-aligned, mapping the ROM at offset 0x{:X} of a chunk at 0x{:X}",
+@@ -1412,13 +1439,13 @@ namespace eka2l1 {
+ 
+             void *rom_file_map = common::map_file(path, prot_read, 0, true);
+ 
+-            if (!rom_file_map) {
++            if (rom_file_map) {
++                std::memcpy(reinterpret_cast<std::uint8_t *>(rom_map_) + rebase_offset, rom_file_map, rom_size);
++                common::unmap_file(rom_file_map);
++            } else if (!read_whole_file(path, reinterpret_cast<std::uint8_t *>(rom_map_) + rebase_offset, rom_size)) {
+                 unmap_rom();
+                 return false;
+             }
+-
+-            std::memcpy(reinterpret_cast<std::uint8_t *>(rom_map_) + rebase_offset, rom_file_map, rom_size);
+-            common::unmap_file(rom_file_map);
+         }
+ 
+         LOG_TRACE(KERNEL, "Rom mapped to address: 0x{:x}", reinterpret_cast<std::uint64_t>(rom_map_));

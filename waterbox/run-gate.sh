@@ -162,6 +162,43 @@ else
 			echo "PASS boot: $(echo "$one" | grep -E '^(instructions|loops):' | tr '\n' ' ')"
 			pass=$((pass + 1))
 		fi
+
+		# ---- the device inside the sandbox ---------------------------------
+		# Drive Z crosses into the box as one pack, served from the machine's
+		# own memory (waterbox/memfs.cpp); the ROM crosses as itself, under the
+		# name the emulator opens it by. Both flavors then run the same
+		# application, and what the processor did must be identical.
+		if [ ! -x "$rw" ] || [ ! -f "$core" ]; then
+			echo "SKIP pack: core.wbx not built"
+		else
+			python3 "$here/gen-device-pack.py" --storage "$work/device" --out "$work/device.pack" > /dev/null
+
+			# The native side gets a storage root holding only the ROM: drive Z
+			# comes from the pack there too, so the two runs differ in nothing
+			# but the sandbox.
+			rm -rf "$work/romonly"
+			mkdir -p "$work/romonly/roms/nem-4"
+			cp "$work/device/roms/nem-4/SYM.ROM" "$work/romonly/roms/nem-4/"
+
+			digest2='^(apps|run|virtual us|instructions):'
+			# Sorted: the two report the same facts, not necessarily in the
+			# same order - one learns the application count while booting, the
+			# other when asked.
+			natp="$(timeout 900 "$rn" --data "$work/romonly" --pack "$work/device.pack" --frames 60 --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
+			boxp="$(timeout 900 "$rw" "$core" --frames 60 --pack "$work/device.pack" --rom "$rom" --run 0x101f4cd2 2>&1 | grep -E "$digest2" | sort)"
+
+			if [ -z "$boxp" ]; then
+				echo "FAIL pack (the sandbox produced nothing)"; fail=$((fail + 1))
+			elif [ "$natp" != "$boxp" ]; then
+				echo "FAIL pack (native vs sandbox with a device)"
+				echo "$natp" > "$work/natp.txt"
+				echo "$boxp" > "$work/boxp.txt"
+				diff "$work/natp.txt" "$work/boxp.txt" | head -20; fail=$((fail + 1))
+			else
+				echo "PASS pack: native == sandbox with the device ($(echo "$boxp" | tr '\n' ' '))"
+				pass=$((pass + 1))
+			fi
+		fi
 	fi
 fi
 

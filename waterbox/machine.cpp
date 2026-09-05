@@ -81,6 +81,18 @@ namespace chimera {
     }
 
     void machine::boot() {
+        if (!options_.in_memory_drives) {
+            mount_host_drives();
+        }
+
+        sys_->initialize_user_parties();
+
+        eka2l1::manager::packages *packages = sys_->get_packages();
+        packages->load_registries();
+        packages->migrate_legacy_registries();
+    }
+
+    void machine::mount_host_drives() {
         // Drive Z is the ROM's own filesystem and can only be mounted once the
         // device has been set, because setting the device is what loads the ROM.
         sys_->mount(drive_c, drive_media::physical,
@@ -92,12 +104,6 @@ namespace chimera {
         sys_->mount(drive_z, drive_media::rom,
             eka2l1::add_path(options_.storage, "/drives/z/"),
             io_attrib_internal | io_attrib_write_protected);
-
-        sys_->initialize_user_parties();
-
-        eka2l1::manager::packages *packages = sys_->get_packages();
-        packages->load_registries();
-        packages->migrate_legacy_registries();
     }
 
     std::uint64_t machine::run_for_us(const std::uint64_t us) {

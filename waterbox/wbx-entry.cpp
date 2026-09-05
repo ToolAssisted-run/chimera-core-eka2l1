@@ -1,19 +1,28 @@
 // EKA2L1 as a Chimera waterbox core: the entry points miniBox calls.
 //
-// At this milestone the machine inside the sandbox is the empty one - no
-// device dump has been handed across yet - so what it does is what an empty
-// machine can do: hold a kernel timer, and let virtual time carry it. That is
-// deliberately the same workload run-native drives, so the two builds can be
-// compared line for line, which is the only way to know the emulator behaves
-// identically inside the box and outside it.
+// The device arrives as two mounted files: the ROM the machine maps into its
+// own memory, under the path the emulator looks for it at, and a pack holding
+// drive Z, which the machine serves from memfs.cpp. With neither of them the
+// machine is still built and still keeps time, which is what the equivalence
+// gate compares when no device dump is present.
 #include "machine.h"
+#include "memfs.h"
 
+#include <common/cvt.h>
+#include <common/path.h>
+#include <kernel/kernel.h>
 #include <kernel/timing.h>
+#include <system/consts.h>
+#include <utils/apacmd.h>
+#include <services/applist/applist.h>
+#include <system/devices.h>
 #include <system/epoc.h>
+#include <vfs/vfs.h>
 
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <string>
 
 #include <emulibc.h>
 #include <waterboxcore.h>
@@ -40,6 +49,13 @@ namespace {
 
     std::uint32_t g_video[SCREEN_WIDTH * SCREEN_HEIGHT];
     std::int16_t g_audio[2] = { 0, 0 };
+
+    std::shared_ptr<chimera::memory_file_system> g_drives;
+    bool g_device = false;
+
+    // The pack the host mounts, if it mounted one. Everything the machine
+    // reads from drive Z comes out of this file as it reads it.
+    constexpr const char *PACK_NAME = "device.pack";
 }
 
 extern "C" {
@@ -54,8 +70,70 @@ ECL_EXPORT int Init(void) {
     chimera::machine_options options;
     options.storage = "data";
 
+    options.in_memory_drives = true;
+
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();
+
+    // The drives, before the device: setting the device loads the ROM and asks
+    // every filesystem about the product code, and ours has to be one of them.
+    g_drives = std::make_shared<chimera::memory_file_system>();
+
+    eka2l1::file_system_inst as_instance = g_drives;
+    g_machine->sys()->get_io_system()->add_filesystem(as_instance);
+
+    if (g_drives->graft_pack(PACK_NAME, drive_z, io_attrib_internal | io_attrib_write_protected)) {
+        // Writable drives for whatever the machine puts on them. They are
+        // empty, they are the machine's, and they travel in its savestates.
+        g_drives->mount_empty(drive_c, drive_media::physical, io_attrib_internal);
+        g_drives->mount_empty(drive_d, drive_media::physical, io_attrib_internal);
+        g_drives->mount_empty(drive_e, drive_media::physical, io_attrib_removeable);
+
+        eka2l1::device_manager *devices = g_machine->sys()->get_device_manager();
+
+        devices->add_new_device(g_drives->device_firmcode(), g_drives->device_model(),
+            g_drives->device_manufacturer(), static_cast<epocver>(g_drives->device_epocver()),
+            g_drives->device_machine_uid());
+
+        // The ROM is the one file the machine still reads from the host, and
+        // it reads it by a name the emulator builds rather than one we choose.
+        // Saying which name, and whether anything is mounted under it, is the
+        // difference between a diagnosable failure and a silent one.
+        const std::string rom_path = eka2l1::add_path(options.storage,
+            eka2l1::add_path(eka2l1::preset::ROM_FOLDER_PATH,
+                eka2l1::add_path(eka2l1::common::lowercase_string(g_drives->device_firmcode()),
+                    eka2l1::preset::ROM_FILENAME)));
+
+        std::FILE *rom = std::fopen(rom_path.c_str(), "rb");
+
+        if (!rom) {
+            std::snprintf(g_loadError, sizeof g_loadError, "nothing is mounted at %s", rom_path.c_str());
+            return 0;
+        }
+
+        std::fclose(rom);
+
+        if (!g_machine->set_device(0)) {
+            std::snprintf(g_loadError, sizeof g_loadError, "the device in %s was refused (rom %s)",
+                PACK_NAME, rom_path.c_str());
+            return 0;
+        }
+
+        // The ROM is loaded by now, and its own directory is what says where a
+        // file on drive Z lives in the machine's memory.
+        g_drives->set_rom(g_machine->sys()->get_rom_info());
+
+        g_machine->boot();
+
+        // The drives were mounted on a filesystem of their own, which nothing
+        // else could have been told about. The application list only scans a
+        // drive it has been told about.
+        for (const drive_number drv : { drive_c, drive_d, drive_e, drive_z }) {
+            g_machine->sys()->get_io_system()->announce_drive(drv, eka2l1::drive_action_mount);
+        }
+
+        g_device = true;
+    }
 
     eka2l1::ntimer *timing = g_machine->sys()->get_ntimer();
 
@@ -133,6 +211,63 @@ ECL_EXPORT std::uint64_t GetTimerLastUs(void) {
 
 ECL_EXPORT std::uint64_t GetTimerLatenessUs(void) {
     return g_timerLatenessUs;
+}
+
+// Starts an application the way the machine's own launcher would, through its
+// registration rather than by opening a file. Answers 1 when the machine took
+// it. Meant for the equivalence gate, which runs the same application here and
+// in the native reference and compares what the processor did.
+ECL_EXPORT int LaunchAppUid(std::uint32_t uid) {
+    if (!g_device) {
+        return 0;
+    }
+
+    eka2l1::kernel_system *kern = g_machine->sys()->get_kernel_system();
+    eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
+        kern->get_by_name<eka2l1::service::server>(
+            eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+
+    if (!applist) {
+        return 0;
+    }
+
+    eka2l1::apa_app_registry *registry = applist->get_registration(uid);
+
+    if (!registry) {
+        return 0;
+    }
+
+    eka2l1::epoc::apa::command_line cmdline;
+    cmdline.launch_cmd_ = eka2l1::epoc::apa::command_create;
+
+    return applist->launch_app(*registry, cmdline, nullptr, nullptr) ? 1 : 0;
+}
+
+ECL_EXPORT std::uint64_t GetAppCount(void) {
+    if (!g_device) {
+        return 0;
+    }
+
+    eka2l1::kernel_system *kern = g_machine->sys()->get_kernel_system();
+    eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
+        kern->get_by_name<eka2l1::service::server>(
+            eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+
+    return applist ? applist->get_registerations().size() : 0;
+}
+
+// The device, if one was handed across: how much of a filesystem the machine
+// is holding, and how much of it is the machine's own rather than the pack's.
+ECL_EXPORT int GetDeviceMounted(void) {
+    return g_device ? 1 : 0;
+}
+
+ECL_EXPORT std::uint64_t GetDriveEntries(void) {
+    return g_drives ? g_drives->entry_count() : 0;
+}
+
+ECL_EXPORT std::uint64_t GetDriveWrittenBytes(void) {
+    return g_drives ? g_drives->written_bytes() : 0;
 }
 
 }

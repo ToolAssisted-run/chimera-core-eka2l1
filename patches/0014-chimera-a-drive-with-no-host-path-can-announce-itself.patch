@@ -1,0 +1,37 @@
+diff --git a/src/emu/vfs/include/vfs/vfs.h b/src/emu/vfs/include/vfs/vfs.h
+index 36825b3b8..cba111b1a 100644
+--- a/src/emu/vfs/include/vfs/vfs.h
++++ b/src/emu/vfs/include/vfs/vfs.h
+@@ -345,6 +345,16 @@ namespace eka2l1 {
+         std::size_t register_drive_change_notify(drive_change_notify_callback callback, void *userdata);
+         bool remove_drive_change_notify(const std::size_t handle);
+ 
++        /*! \brief Tell the system a drive appeared or went away.
++         *
++         * mount_physical_path announces the drives it mounts, but a filesystem
++         * can hold a volume that has no path on the host at all - one served
++         * from memory, or from an archive - and mount it itself. Nothing
++         * rescans such a drive unless somebody says it is there: the
++         * application list, in particular, only scans a drive it is told about.
++         */
++        void announce_drive(const drive_number drv, const drive_action act);
++
+         std::optional<std::u16string> get_raw_path(const std::u16string &path);
+ 
+         /*! \brief Add a new file system to the IO system
+diff --git a/src/emu/vfs/src/vfs.cpp b/src/emu/vfs/src/vfs.cpp
+index df9911a5d..1625a47c8 100644
+--- a/src/emu/vfs/src/vfs.cpp
++++ b/src/emu/vfs/src/vfs.cpp
+@@ -1486,6 +1486,11 @@ namespace eka2l1 {
+         return drive_change_callbacks.remove(handle);
+     }
+ 
++    void io_system::announce_drive(const drive_number drv, const drive_action act) {
++        const std::lock_guard<std::mutex> guard(access_lock);
++        invoke_drive_change_callbacks(drv, act);
++    }
++
+     void io_system::invoke_drive_change_callbacks(drive_number drv, drive_action act) {
+         for (auto &callback : drive_change_callbacks) {
+             access_lock.unlock();

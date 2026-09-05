@@ -10,12 +10,16 @@
 // a convenience: it stalls the host between frames, and a machine whose time
 // still came from the wall would report a different timeline.
 #include "machine.h"
+#include "memfs.h"
 
 #include <common/log.h>
 #include <common/cvt.h>
 #include <kernel/kernel.h>
 #include <kernel/timing.h>
 #include <services/applist/applist.h>
+#include <common/path.h>
+#include <system/consts.h>
+#include <vfs/vfs.h>
 #include <utils/apacmd.h>
 #include <system/devices.h>
 #include <system/epoc.h>
@@ -28,6 +32,17 @@
 #include <string>
 #include <thread>
 
+namespace {
+    // Drives served from memory have no host path, so they cannot be mounted
+    // through mount_physical_path and nothing announces them. The application
+    // list only scans a drive it has been told about.
+    void announce_memory_drives(eka2l1::io_system *io) {
+        for (const drive_number drv : { drive_c, drive_d, drive_e, drive_z }) {
+            io->announce_drive(drv, eka2l1::drive_action_mount);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     chimera::machine_options options;
     options.storage = "data";
@@ -38,6 +53,10 @@ int main(int argc, char **argv) {
     int timer_period_us = 0;
     bool list_apps = false;
     std::string run_path;
+    std::string probe_path;
+    std::string pack_path;
+    bool print_rom_path = false;
+    bool verbose = false;
 
     for (int i = 1; i < argc; i++) {
         const bool has_value = (i + 1 < argc);
@@ -54,6 +73,14 @@ int main(int argc, char **argv) {
             timer_period_us = std::atoi(argv[++i]);
         } else if (std::strcmp(argv[i], "--host-clock") == 0) {
             options.host_clock = true;
+        } else if ((std::strcmp(argv[i], "--probe") == 0) && has_value) {
+            probe_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--pack") == 0) && has_value) {
+            pack_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--verbose") == 0) {
+            verbose = true;
+        } else if (std::strcmp(argv[i], "--print-rom-path") == 0) {
+            print_rom_path = true;
         } else if (std::strcmp(argv[i], "--list-apps") == 0) {
             list_apps = true;
         } else if ((std::strcmp(argv[i], "--run") == 0) && has_value) {
@@ -71,12 +98,57 @@ int main(int argc, char **argv) {
 
     eka2l1::log::setup_log(nullptr);
 
+    // What the emulator has to say. Off by default: the gate compares output,
+    // and the log is a running commentary with paths in it.
+    if (verbose) {
+        eka2l1::log::toggle_console();
+    }
+
+    // With a pack, the drives come from the machine's own memory - the same
+    // filesystem the sandbox uses, exercised where it can be debugged.
+    options.in_memory_drives = !pack_path.empty();
+
     chimera::machine machine(options);
 
-    const std::size_t devices = machine.device_count();
+    std::shared_ptr<chimera::memory_file_system> drives;
+
+    if (!pack_path.empty()) {
+        drives = std::make_shared<chimera::memory_file_system>();
+    }
+
 
     std::printf("storage: %s\n", options.storage.c_str());
     std::printf("clock: %s\n", options.host_clock ? "the host's" : "virtual");
+
+    // startup() needs no device: it builds the timer, the physical filesystem,
+    // the exclusive monitor, the CPU core and the kernel. Whether there is a
+    // device to boot afterwards is a separate question, and the answer to it is
+    // the user's to supply.
+    machine.startup();
+
+    if (drives) {
+        eka2l1::file_system_inst as_instance = drives;
+        machine.sys()->get_io_system()->add_filesystem(as_instance);
+
+        if (!drives->graft_pack(pack_path, drive_z, io_attrib_internal | io_attrib_write_protected)) {
+            std::fprintf(stderr, "%s is not a device pack\n", pack_path.c_str());
+            return 1;
+        }
+
+        drives->mount_empty(drive_c, drive_media::physical, io_attrib_internal);
+        drives->mount_empty(drive_d, drive_media::physical, io_attrib_internal);
+        drives->mount_empty(drive_e, drive_media::physical, io_attrib_removeable);
+
+        machine.sys()->get_device_manager()->add_new_device(drives->device_firmcode(),
+            drives->device_model(), drives->device_manufacturer(),
+            static_cast<epocver>(drives->device_epocver()), drives->device_machine_uid());
+
+        std::printf("pack: %zu entries, device %s\n", drives->entry_count(),
+            drives->device_firmcode().c_str());
+    }
+
+    const std::size_t devices = machine.device_count();
+
     std::printf("devices: %zu\n", devices);
 
     for (std::size_t i = 0; i < devices; i++) {
@@ -84,12 +156,6 @@ int main(int argc, char **argv) {
         std::printf("device %zu: %s %s (%s) epocver=%d\n", i, dvc.manufacturer.c_str(),
             dvc.model.c_str(), dvc.firmware_code.c_str(), static_cast<int>(dvc.ver));
     }
-
-    // startup() needs no device: it builds the timer, the physical filesystem,
-    // the exclusive monitor, the CPU core and the kernel. Whether there is a
-    // device to boot afterwards is a separate question, and the answer to it is
-    // the user's to supply.
-    machine.startup();
 
     static const char *const backend_names[] = { "unicorn", "dynarmic", "12l1r", "dyncom" };
     const int backend = static_cast<int>(machine.sys()->get_cpu_executor_type());
@@ -104,14 +170,103 @@ int main(int argc, char **argv) {
         std::printf("device 0: %s\n", set ? "set" : "refused");
 
         if (set) {
+            if (drives) {
+                // The ROM is loaded by now, and its own directory is what says
+                // where a file on drive Z lives in the machine's memory.
+                drives->set_rom(machine.sys()->get_rom_info());
+            }
+
             machine.boot();
+
+            if (drives) {
+                // The drives were mounted on a filesystem of their own, which
+                // nothing else could have been told about.
+                announce_memory_drives(machine.sys()->get_io_system());
+            }
+
             std::printf("boot: ok\n");
+
+            // How many applications the machine found. It is the shortest
+            // statement that its filesystem works, whichever one is serving it.
+            if (eka2l1::kernel_system *kern = machine.sys()->get_kernel_system()) {
+                eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
+                    kern->get_by_name<eka2l1::service::server>(
+                        eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+
+                if (applist) {
+                    std::printf("apps: %zu\n", applist->get_registerations().size());
+                }
+            }
         }
     }
 
     // The memory model follows the device's Symbian version, so the MMU only
     // exists once a device has been set.
     std::printf("memory: %s\n", machine.sys()->get_memory_system() ? "up" : "absent, no device");
+
+    if (print_rom_path) {
+        // The exact name the emulator will open the ROM under. A sandbox has
+        // to mount it under that name and no other, and the construction is
+        // upstream's, not ours to guess.
+        for (std::size_t i = 0; i < devices; i++) {
+            const eka2l1::device &dvc = machine.sys()->get_device_manager()->get_devices()[i];
+
+            std::printf("rom path: %s\n", eka2l1::add_path(options.storage,
+                eka2l1::add_path(eka2l1::preset::ROM_FOLDER_PATH,
+                    eka2l1::add_path(eka2l1::common::lowercase_string(dvc.firmware_code),
+                        eka2l1::preset::ROM_FILENAME))).c_str());
+        }
+    }
+
+    if (!probe_path.empty()) {
+        // Which drives the system believes it has, whichever filesystem is
+        // holding them.
+        std::string mounted;
+
+        for (int drv = drive_a; drv <= drive_z; drv++) {
+            if (machine.sys()->get_io_system()->get_drive_entry(static_cast<drive_number>(drv))) {
+                mounted += static_cast<char>('a' + drv - drive_a);
+            }
+        }
+
+        std::printf("drives: %s\n", mounted.empty() ? "(none)" : mounted.c_str());
+
+        // What the machine's own filesystem says about a path, whichever
+        // filesystem happens to be serving it.
+        eka2l1::io_system *io = machine.sys()->get_io_system();
+        const std::u16string wide = eka2l1::common::utf8_to_ucs2(probe_path);
+
+        std::printf("probe %s: exist=%d dir=%d\n", probe_path.c_str(),
+            io->exist(wide) ? 1 : 0, io->open_dir(wide) ? 1 : 0);
+
+        if (std::unique_ptr<eka2l1::file> handle = io->open_file(wide, READ_MODE | BIN_MODE)) {
+            std::uint8_t head[16] = { 0 };
+            const std::size_t got = handle->read_file(head, 1, sizeof(head));
+
+            std::printf("  open: size=%llu read=%zu bytes=%02x%02x%02x%02x\n",
+                static_cast<unsigned long long>(handle->size()), got, head[0], head[1], head[2], head[3]);
+        } else {
+            std::printf("  open: refused\n");
+        }
+
+        // The same question the application scan asks: the directories under a
+        // path, in the order the filesystem hands them back.
+        std::unique_ptr<eka2l1::directory> listing = io->open_dir(wide, {}, io_attrib_include_dir);
+
+        if (listing) {
+            int shown = 0;
+
+            while (auto entry = listing->get_next_entry()) {
+                if (shown++ < 8) {
+                    std::printf("  entry: %s (%s) full=%s\n", entry->name.c_str(),
+                        entry->type == eka2l1::io_component_type::dir ? "dir" : "file",
+                        entry->full_path.c_str());
+                }
+            }
+
+            std::printf("  entries: %d\n", shown);
+        }
+    }
 
     if (list_apps || !run_path.empty()) {
         eka2l1::kernel_system *kern = machine.sys()->get_kernel_system();
@@ -123,7 +278,6 @@ int main(int argc, char **argv) {
             std::printf("apps: no application list server\n");
         } else if (list_apps) {
             std::vector<eka2l1::apa_app_registry> &regs = applist->get_registerations();
-            std::printf("apps: %zu\n", regs.size());
 
             for (auto &reg : regs) {
                 std::printf("app 0x%08x: %s\n", reg.mandatory_info.uid,

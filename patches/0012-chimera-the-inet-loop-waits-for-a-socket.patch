@@ -1,0 +1,57 @@
+diff --git a/src/emu/services/include/services/internet/protocols/inet.h b/src/emu/services/include/services/internet/protocols/inet.h
+index 5754a6916..2b2b57812 100644
+--- a/src/emu/services/include/services/internet/protocols/inet.h
++++ b/src/emu/services/include/services/internet/protocols/inet.h
+@@ -314,7 +314,6 @@ namespace eka2l1::epoc::internet {
+ 
+     class inet_bridged_protocol : public socket::protocol {
+     private:
+-        std::shared_ptr<libuv::looper> looper_;
+         kernel_system *kern_;
+ 
+     public:
+@@ -360,8 +359,12 @@ namespace eka2l1::epoc::internet {
+             return kern_;
+         }
+ 
++        // The loop the sockets of this protocol run on. Taken when a socket
++        // asks rather than when the protocol is built: the protocol is created
++        // for every machine, and building the loop opens an epoll descriptor
++        // that a machine which never opens a socket has no use for.
+         std::shared_ptr<libuv::looper> get_looper() {
+-            return looper_;
++            return libuv::default_looper;
+         }
+     };
+ 
+diff --git a/src/emu/services/src/internet/protocols/overall.cpp b/src/emu/services/src/internet/protocols/overall.cpp
+index e8dbd62dd..21e657806 100644
+--- a/src/emu/services/src/internet/protocols/overall.cpp
++++ b/src/emu/services/src/internet/protocols/overall.cpp
+@@ -31,7 +31,6 @@
+ namespace eka2l1::epoc::internet {
+     inet_bridged_protocol::inet_bridged_protocol(kernel_system *kern, const bool oldarch)
+         : socket::protocol(oldarch)
+-        , looper_(libuv::default_looper)
+         , kern_(kern) {
+ #if EKA2L1_PLATFORM(WIN32)
+         WSADATA init_data;
+diff --git a/src/emu/services/src/internet/protocols/socket.cpp b/src/emu/services/src/internet/protocols/socket.cpp
+index c96ec9008..f03fc54b4 100644
+--- a/src/emu/services/src/internet/protocols/socket.cpp
++++ b/src/emu/services/src/internet/protocols/socket.cpp
+@@ -59,9 +59,11 @@ namespace eka2l1::epoc::internet {
+     }
+ 
+     void inet_bridged_protocol::initialize_looper() {
+-        if (!looper_->started()) {
+-            looper_->set_loop_thread_prepare_callback([]() { common::set_thread_priority(common::thread_priority_very_high); });
+-            looper_->start();
++        std::shared_ptr<libuv::looper> looper = get_looper();
++
++        if (!looper->started()) {
++            looper->set_loop_thread_prepare_callback([]() { common::set_thread_priority(common::thread_priority_very_high); });
++            looper->start();
+         }
+     }
+ 

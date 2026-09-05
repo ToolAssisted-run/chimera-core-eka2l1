@@ -160,16 +160,21 @@ networking, no real audio or input devices.
   check-wbx, and it runs the same workload as the native reference to the microsecond.
   What the sandbox still lacks is a filesystem: the device dump cannot reach the machine
   inside the box yet, so what runs there is the empty machine. That is M3's first job.
-- **M3 - the picture.** The command list pumped inline, the ogl backend fed by the GL
+- **M3 - the device in the box. HALF DONE 2026-09-05.** The guest filesystem is
+  written and the device boots inside the sandbox: 58 applications found, the
+  machine's own menu launched, and native == sandbox to the instruction. The
+  remaining half is above: drive Z should come from the ROM rather than from a
+  pack beside it.
+- **M4 - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
-- **M4 - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
+- **M5 - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
   a real game card booting to its title screen.
-- **M5 - savestates and rewind.** Arena snapshots, the rewind leg, the GPU-state rule
+- **M6 - savestates and rewind.** Arena snapshots, the rewind leg, the GPU-state rule
   the bridge already carries.
-- **M6 - the package.** `eka2l1.chimeraCore`, the firmware declaration for the device
+- **M7 - the package.** `eka2l1.chimeraCore`, the firmware declaration for the device
   dump, the bundle for what the device writes, default keybinds, the licence manifest.
-- **M7 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
+- **M8 - dynarmic.** The JIT as a setting, with the interpreter-agreement leg from
   upstream's own differential harness.
 
 ## What the sandbox needed (M2, 2026-09-05)
@@ -195,6 +200,60 @@ networking, no real audio or input devices.
   `rmdir`, `chdir`, `chmod`, `umask`). The sandbox holds a flat set of mounted files, so
   the directory calls answer success and every name resolves to a mounted file or to
   nothing.
+
+## The guest filesystem (M3, 2026-09-05)
+
+The sandbox mounts a flat list of named files: no directories, no creation, no
+enumeration. Symbian needs all three, so the drives are served from
+`waterbox/memfs.cpp` - an implementation of EKA2L1's own `abstract_file_system`,
+held in the machine's memory and added with `io_system::add_filesystem`. A file in
+it is either bytes the machine wrote, which are the machine's state and belong in
+its savestates, or a slice of a device pack the host mounted, read as the machine
+reads it: fifteen megabytes of ROM files that never change are not state, and
+copying them into the arena would put them in every savestate for nothing.
+`waterbox/gen-device-pack.py` builds the pack from a storage root
+`install-device` wrote; entries are sorted, and nothing about the host reaches it.
+
+What the machine still reads from the host is the ROM itself, mounted under the
+name the emulator builds for it (`<storage>/roms//<firmcode>/SYM.ROM`, which
+`run-native --print-rom-path` prints rather than anyone guessing).
+
+Six patches and four findings came out of it:
+
+- **0010**: a marker file the emulator could not write took the whole emulator
+  down through `fclose(nullptr)`.
+- **0011**: `map_rom` maps the ROM file into memory, and a sandbox that serves
+  files but has no file-backed mapping cannot. It reads the ROM instead.
+- **0012, 0013**: registering the bluetooth stack started libuv's loop - an epoll
+  descriptor and a thread - on every machine that booted, and the inet protocol
+  took the default loop when it was built rather than when a socket asked.
+- **0014**: a drive with no host path cannot be mounted through
+  `mount_physical_path`, and nothing announced it, so the application list never
+  scanned it.
+- **0015**: the window server read `wsini.ini` by host path through
+  `get_raw_path`, which a filesystem with no host path cannot answer. It reads
+  through the VFS now, which needed `ini_file` and `dynamic_ifile` to accept
+  bytes as well as a path.
+- `read_file` returns **bytes**, not elements, and a `seek` in `address` mode
+  answers `0xFFFFFFFF` for a file that is not in ROM. Both were silent: the first
+  made every application registration fail to parse, the second sent the caller
+  looking for an icon at an address that was not one.
+- Executables on a Symbian 6 device's drive Z are ROM images, not E32 images, and
+  the loader picks between them by asking the file whether it is in ROM. Answer
+  no and nothing on the machine ever starts.
+
+**What this does not do yet.** Upstream serves drive Z from the ROM image itself
+(`rom_file_system`), and the extracted copy exists only because every lookup in it
+is gated on the file existing on the host first (`open_file`, `get_entry_info` and
+`is_entry_in_rom` all begin with "don't bother if it's not even available on
+host"). A file served from the pack is therefore an ordinary file where upstream
+would hand back a ROM file with the ROM's own attributes and address. The machine
+boots, finds its 58 applications and runs the menu identically in both flavors -
+14,403 instructions - but the same menu on host directories reaches 681,873 before
+it settles, so something the ROM filesystem provides is still missing. Making the
+ROM authoritative - its own tree first, the host only as a fallback, and a
+directory iterator over that tree - would close the gap and delete the pack
+entirely, leaving the ROM as the single file the device needs.
 
 ## Open questions
 
