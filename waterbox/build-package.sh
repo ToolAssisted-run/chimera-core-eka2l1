@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the EKA2L1 waterbox core package and installs it into a chimera
-# checkout as build/Cores/eka2l1.zip.
+# checkout as build/Cores/eka2l1.chimeraCore.
 #
 # A package is core.wbx (fixed name) + waterbox.config + default_keybinds.json,
 # loaded through chimera's one built-in generic adapter.
@@ -98,7 +98,7 @@ PYPROV
 
 cores_dir="$chimera_root/build/Cores"
 mkdir -p "$cores_dir"
-zip_path="$cores_dir/eka2l1.zip"
+zip_path="$cores_dir/eka2l1.chimeraCore"
 rm -f "$zip_path"
 # deterministic packaging: sorted entries, fixed timestamp/permissions, pinned
 # compression - the package's SHA1 is the core's identity (movies cite it)
