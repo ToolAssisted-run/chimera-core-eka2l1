@@ -1,0 +1,181 @@
+diff --git a/src/emu/ldd/CMakeLists.txt b/src/emu/ldd/CMakeLists.txt
+index de676e345..d758488e7 100644
+--- a/src/emu/ldd/CMakeLists.txt
++++ b/src/emu/ldd/CMakeLists.txt
+@@ -6,6 +6,7 @@ add_library(epocldd
+         include/ldd/hal/hal.h
+         include/ldd/mmcif/consts.h
+         include/ldd/mmcif/mmcif.h
++        include/ldd/nulldevice/nulldevice.h
+         include/ldd/oldcamera/oldcamera.h
+         include/ldd/videodriver/videodriver.h
+         src/collection.cpp
+@@ -13,6 +14,7 @@ add_library(epocldd
+         src/ekeyb/ekeyb.cpp
+         src/hal/hal.cpp
+         src/mmcif/mmcif.cpp
++        src/nulldevice/nulldevice.cpp
+         src/oldcamera/oldcamera.cpp
+         src/videodriver/videodriver.cpp
+ )
+diff --git a/src/emu/ldd/include/ldd/nulldevice/nulldevice.h b/src/emu/ldd/include/ldd/nulldevice/nulldevice.h
+new file mode 100644
+index 000000000..34c183b89
+--- /dev/null
++++ b/src/emu/ldd/include/ldd/nulldevice/nulldevice.h
+@@ -0,0 +1,56 @@
++/*
++ * Copyright (c) 2026 EKA2L1 Team.
++ *
++ * This file is part of EKA2L1 project.
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program. If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#pragma once
++
++#include <kernel/ldd.h>
++
++namespace eka2l1::ldd {
++    /**
++     * @brief A device the emulator does not model, that opens anyway.
++     *
++     * Some drivers are not the emulator's business: the sound hardware is
++     * driven by the audio driver rather than by the guest's own device, and
++     * nothing the guest asks the device would change what comes out. What
++     * matters is that the device OPENS. A media server that cannot open its
++     * audio device does not report the failure - it dereferences the channel
++     * it did not get, takes itself down with it, and every application waiting
++     * on sound waits forever.
++     *
++     * So this accepts, does nothing, and says so in the log.
++     */
++    class null_device_channel : public channel {
++    public:
++        explicit null_device_channel(kernel_system *kern, system *sys, epoc::version ver);
++
++        std::int32_t do_control(kernel::thread *r, const std::uint32_t n, const eka2l1::ptr<void> arg1,
++            const eka2l1::ptr<void> arg2) override;
++
++        std::int32_t do_request(epoc::notify_info info, const std::uint32_t n, const eka2l1::ptr<void> arg1,
++            const eka2l1::ptr<void> arg2, const bool is_supervisor) override;
++    };
++
++    class null_device_factory : public factory {
++    public:
++        explicit null_device_factory(kernel_system *kern, system *sys);
++
++        void install() override;
++        std::unique_ptr<channel> make_channel(epoc::version ver) override;
++    };
++}
+diff --git a/src/emu/ldd/src/collection.cpp b/src/emu/ldd/src/collection.cpp
+index 82fbf2b62..1c8f831f2 100644
+--- a/src/emu/ldd/src/collection.cpp
++++ b/src/emu/ldd/src/collection.cpp
+@@ -23,6 +23,7 @@
+ #include <ldd/hal/hal.h>
+ #include <ldd/mmcif/mmcif.h>
+ #include <ldd/oldcamera/oldcamera.h>
++#include <ldd/nulldevice/nulldevice.h>
+ #include <ldd/videodriver/videodriver.h>
+ 
+ #include <system/epoc.h>
+@@ -44,6 +45,7 @@ namespace eka2l1::ldd {
+     FACTORY_DECLARE(ecomm_factory)
+     FACTORY_DECLARE(hal_factory)
+     FACTORY_DECLARE(video_driver_factory)
++    FACTORY_DECLARE(null_device_factory)
+     FACTORY_DECLARE(ekeyb_factory)
+     FACTORY_DECLARE(old_camera_factory)
+ 
+@@ -52,6 +54,12 @@ namespace eka2l1::ldd {
+         FACTORY_REGISTER("ecomm", ecomm_factory),
+         FACTORY_REGISTER("dhal", hal_factory),
+         FACTORY_REGISTER("videodriver", video_driver_factory),
++        // The sound hardware is driven by the audio driver, not by the
++        // guest's device: what the guest asks it changes nothing. Opening it
++        // does matter, though - see nulldevice.h.
++        FACTORY_REGISTER("audio", null_device_factory),
++        FACTORY_REGISTER("audioldd", null_device_factory),
++        FACTORY_REGISTER("nosdriver", null_device_factory),
+         FACTORY_REGISTER("ekeyb", ekeyb_factory),
+         FACTORY_REGISTER("cameraldd", old_camera_factory),
+     };
+diff --git a/src/emu/ldd/src/nulldevice/nulldevice.cpp b/src/emu/ldd/src/nulldevice/nulldevice.cpp
+new file mode 100644
+index 000000000..b4a50f191
+--- /dev/null
++++ b/src/emu/ldd/src/nulldevice/nulldevice.cpp
+@@ -0,0 +1,60 @@
++/*
++ * Copyright (c) 2026 EKA2L1 Team.
++ *
++ * This file is part of EKA2L1 project.
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program. If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <ldd/nulldevice/nulldevice.h>
++
++#include <common/log.h>
++#include <utils/err.h>
++
++#include <string>
++
++namespace eka2l1::ldd {
++    static const std::string NULL_DEVICE_FACTORY_NAME = "NullDevice";
++
++    null_device_factory::null_device_factory(kernel_system *kern, system *sys)
++        : factory(kern, sys) {
++    }
++
++    void null_device_factory::install() {
++        obj_name = NULL_DEVICE_FACTORY_NAME;
++    }
++
++    std::unique_ptr<channel> null_device_factory::make_channel(epoc::version ver) {
++        return std::make_unique<null_device_channel>(kern, sys_, ver);
++    }
++
++    null_device_channel::null_device_channel(kernel_system *kern, system *sys, epoc::version ver)
++        : channel(kern, sys, ver) {
++    }
++
++    std::int32_t null_device_channel::do_control(kernel::thread *r, const std::uint32_t n,
++        const eka2l1::ptr<void> arg1, const eka2l1::ptr<void> arg2) {
++        LOG_TRACE(LDD_MMCIF, "Null device control opcode {} accepted and ignored", n);
++        return epoc::error_none;
++    }
++
++    std::int32_t null_device_channel::do_request(epoc::notify_info info, const std::uint32_t n,
++        const eka2l1::ptr<void> arg1, const eka2l1::ptr<void> arg2, const bool is_supervisor) {
++        LOG_TRACE(LDD_MMCIF, "Null device request opcode {} accepted and ignored", n);
++
++        // A request nobody will complete is a thread that waits forever.
++        info.complete(epoc::error_none);
++        return epoc::error_none;
++    }
++}

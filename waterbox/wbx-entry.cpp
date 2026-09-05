@@ -37,10 +37,6 @@ namespace {
     constexpr int SCREEN_WIDTH = 176;
     constexpr int SCREEN_HEIGHT = 208;
 
-    // The workload: a kernel timer every millisecond, matching
-    // `run-native --timer-us 1000`.
-    constexpr int TIMER_PERIOD_US = 1000;
-
     char g_loadError[512] = { 0 };
     bool g_inited = false;
 
@@ -50,6 +46,7 @@ namespace {
     std::uint64_t g_timerLastUs = 0;
     std::uint64_t g_timerLatenessUs = 0;
     int g_timerEvent = 0;
+    int g_timerPeriodUs = 0;
 
     // The picture and the sound of one frame. The screen is the N-Gage's own
     // 176x208; the buffer is the largest a Symbian screen this core will run
@@ -159,8 +156,22 @@ ECL_EXPORT int Init(void) {
         g_device = true;
     }
 
+    g_inited = true;
+    return 1;
+}
+
+// A kernel timer of the host's asking, every `us` microseconds. Not something
+// a machine has of its own: it is how the equivalence gate gives an empty
+// machine - one with no device - something to do that both flavors can be
+// compared on. Zero, the default, registers nothing.
+ECL_EXPORT void SetTimerCheckUs(std::int32_t us) {
+    if (!g_inited || (us <= 0) || (g_timerEvent != 0)) {
+        return;
+    }
+
     eka2l1::ntimer *timing = g_machine->sys()->get_ntimer();
 
+    g_timerPeriodUs = us;
     g_timerEvent = timing->register_event("chimera:timer-check",
         [timing](const std::uint64_t userdata, const int late) {
             (void)userdata;
@@ -169,13 +180,10 @@ ECL_EXPORT int Init(void) {
             g_timerLastUs = timing->microseconds();
             g_timerLatenessUs += static_cast<std::uint64_t>(late);
 
-            timing->schedule_event(TIMER_PERIOD_US, g_timerEvent, 0);
+            timing->schedule_event(g_timerPeriodUs, g_timerEvent, 0);
         });
 
-    timing->schedule_event(TIMER_PERIOD_US, g_timerEvent, 0);
-
-    g_inited = true;
-    return 1;
+    timing->schedule_event(g_timerPeriodUs, g_timerEvent, 0);
 }
 
 ECL_EXPORT void FrameAdvance(std::uint64_t) {

@@ -364,10 +364,32 @@ the N-Gage's direct-LCD logical device driver, and then stops in
   which is not a device driver, so it was not kept. A machine should not claim to
   have a device it does not have.
 
-After the open the game creates a heap, switches to it and waits for a request that
-never comes; holding a key does not wake it. Writing a real `lcd` channel - one that
-hands the game the screen buffer chunk the emulator already creates for direct
-screen access - is the next thing to try.
+Then a second thing, found by asking every thread in the machine what it was
+doing: `MediaServer` and `XFcSound` were **dead**. The media server opens
+`AUDIO.LDD`, which is not emulated either, and rather than report the failure it
+dereferences the channel it did not get - KERN-EXEC 3 - taking itself, its task
+thread and the game's sound thread with it. Everything waiting on sound then waits
+forever.
+
+Patch 0022 gives those a **null device**: a channel that opens, accepts every
+control and request, completes them, and does nothing. That is honest for the sound
+hardware, which the audio driver drives rather than the guest's device, and what
+matters is only that it opens. With it, no thread dies: the machine keeps
+`MediaServer`, `MediaServerTaskThread`, `XFcSound` and a `DSA sync thread` alive,
+so the game has set up direct screen access. `lcd` deliberately did NOT get one - a
+screen device that answers nothing would be a lie about the screen.
+
+The game still does not draw: every thread ends up waiting on a fast semaphore. The
+next thing to try is a real `lcd` channel, one that hands the game the screen buffer
+chunk the emulator already creates (`ScreenBuffer0`, whose address the display HAL
+already reports as `video_address_`).
+
+**The core was perturbing its own machine.** Chasing the divergence this opened up
+found it: the guest registered a kernel timer every millisecond, left over from the
+milestone that proved the clock, so the shipped core did 999 extra kernel events a
+second that the native reference did not. It is the host's to ask for now
+(`SetTimerCheckUs`), which is what the gate does, and the two flavors agree again -
+74,720,168 instructions each.
 
 `.blz` remains out of reach: it needs a third-party installer app (BLZinstapp) run
 inside the machine, which needs the picture.

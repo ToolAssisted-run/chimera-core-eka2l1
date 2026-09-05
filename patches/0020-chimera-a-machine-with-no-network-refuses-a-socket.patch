@@ -1,18 +1,11 @@
 diff --git a/src/emu/config/include/config/config.h b/src/emu/config/include/config/config.h
-index efa97cc01..143583ed5 100644
+index 58493a5f1..143583ed5 100644
 --- a/src/emu/config/include/config/config.h
 +++ b/src/emu/config/include/config/config.h
-@@ -128,6 +128,20 @@ namespace eka2l1::config {
-         bool nearest_neighbor_filtering{ true };
-         bool integer_scaling{ true };
-         bool cpu_load_save{ true };
-+
-+        // Application registries are scanned on a pool as wide as the host has
-+        // cores, and the order they land in the list is the order the workers
-+        // finish. Two machines, or two runs, can end up with the same apps in a
-+        // different order. An emulator that has to answer the same way every
-+        // time scans on the calling thread instead.
-+        bool single_thread_app_scan{ false };
+@@ -135,6 +135,13 @@ namespace eka2l1::config {
+         // different order. An emulator that has to answer the same way every
+         // time scans on the calling thread instead.
+         bool single_thread_app_scan{ false };
 +
 +        // Whether this machine has a network at all. The internet stack starts
 +        // a libuv loop - an epoll descriptor and a thread of its own - the
@@ -24,7 +17,7 @@ index efa97cc01..143583ed5 100644
  
          std::atomic<bool> stepping{ false };
 diff --git a/src/emu/services/src/internet/protocols/socket.cpp b/src/emu/services/src/internet/protocols/socket.cpp
-index c96ec9008..0ea8f337a 100644
+index f03fc54b4..0ea8f337a 100644
 --- a/src/emu/services/src/internet/protocols/socket.cpp
 +++ b/src/emu/services/src/internet/protocols/socket.cpp
 @@ -44,10 +44,16 @@ extern "C" {
@@ -43,19 +36,4 @@ index c96ec9008..0ea8f337a 100644
 +
          std::unique_ptr<epoc::socket::socket> sock = std::make_unique<inet_socket>(this);
          inet_socket *sock_casted = reinterpret_cast<inet_socket*>(sock.get());
- 
-@@ -59,9 +65,11 @@ namespace eka2l1::epoc::internet {
-     }
- 
-     void inet_bridged_protocol::initialize_looper() {
--        if (!looper_->started()) {
--            looper_->set_loop_thread_prepare_callback([]() { common::set_thread_priority(common::thread_priority_very_high); });
--            looper_->start();
-+        std::shared_ptr<libuv::looper> looper = get_looper();
-+
-+        if (!looper->started()) {
-+            looper->set_loop_thread_prepare_callback([]() { common::set_thread_priority(common::thread_priority_very_high); });
-+            looper->start();
-         }
-     }
  

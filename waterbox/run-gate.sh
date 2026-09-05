@@ -104,7 +104,7 @@ if [ ! -x "$rw" ] || [ ! -f "$core" ]; then
 	echo "SKIP sandbox: core.wbx not built (./waterbox/build-guest.sh && ./waterbox/build-core.sh)"
 else
 	nat="$(run | grep -E "$digest")"
-	box="$(timeout 600 "$rw" "$core" --frames 60 2>&1 | grep -E "$digest")"
+	box="$(timeout 600 "$rw" "$core" --frames 60 --timer-us 1000 2>&1 | grep -E "$digest")"
 
 	if [ -z "$box" ]; then
 		echo "FAIL sandbox (no output)"; fail=$((fail + 1))

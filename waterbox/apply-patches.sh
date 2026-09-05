@@ -11,7 +11,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 eka="$root/extern/eka2l1"
 
-if ! git -C "$eka" diff --quiet; then
+# Untracked files count too: a patch that adds a file cannot be applied twice,
+# and git diff does not see one.
+if [ -n "$(git -C "$eka" status --porcelain)" ]; then
 	echo "patches: already applied ($(ls "$root"/patches/*.patch | wc -l) in the series)"
 	exit 0
 fi
@@ -19,7 +21,8 @@ fi
 for p in "$root"/patches/*.patch; do
 	git -C "$eka" apply "$p" || {
 		echo "FAILED to apply $(basename "$p") - the tree is now half patched;" >&2
-		echo "run: git -C extern/eka2l1 reset --hard, then try again" >&2
+		echo "run: git -C extern/eka2l1 reset --hard && git -C extern/eka2l1 clean -fdq," >&2
+		echo "then try again" >&2
 		exit 1
 	}
 	echo "applied: $(basename "$p")"

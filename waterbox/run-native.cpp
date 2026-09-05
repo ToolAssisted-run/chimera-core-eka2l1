@@ -19,6 +19,7 @@ extern "C" void *chimera_egl_proc(const char *name);
 
 #include <common/cvt.h>
 #include <kernel/kernel.h>
+#include <kernel/thread.h>
 #include <kernel/timing.h>
 #include <services/applist/applist.h>
 #include <common/path.h>
@@ -173,6 +174,11 @@ int main(int argc, char **argv) {
     // device to boot afterwards is a separate question, and the answer to it is
     // the user's to supply.
     machine.startup();
+
+    // The machine gets somewhere to put its sound, exactly as the core gives
+    // it one: with the media server alive, whether there is an audio driver
+    // changes what the machine does.
+    machine.start_audio();
 
     if (gpu) {
         char err[256] = { 0 };
@@ -428,6 +434,26 @@ int main(int argc, char **argv) {
 
         loops += machine.run_for_us(slice_us);
 
+        // Pull a frame of sound, the way a core does. Pulling is not passive:
+        // it runs the machine's own audio callbacks, and a reference that does
+        // not pull is not running the same machine.
+        {
+            std::vector<std::int16_t> discarded(2 * (44100 / 60));
+            machine.render_audio(discarded.data(), discarded.size() / 2);
+        }
+
+        // Compose every frame, the way a core does: a machine drawing through
+        // direct screen access waits for the screen to be put together, and a
+        // composite that only happens when somebody reads is a composite the
+        // machine never sees.
+        if (gpu) {
+            std::vector<std::uint32_t> ignored;
+            int ignored_width = 0;
+            int ignored_height = 0;
+
+            machine.read_screen(ignored, ignored_width, ignored_height);
+        }
+
         if (sleep_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         }
@@ -462,6 +488,30 @@ int main(int argc, char **argv) {
             if (!screen_out.empty()) {
                 write_tga(screen_out.c_str(), screen.data(), width, height);
             }
+        }
+    }
+
+    if (verbose) {
+        // Every thread the machine has and what it is doing. A machine that
+        // has gone quiet is a machine where every thread is waiting, and this
+        // says which ones and for what kind of thing.
+        static const char *const STATES[] = {
+            "create", "run", "wait", "ready", "stop", "wait-fast-sema", "wait-mutex",
+            "wait-condvar", "wait-mutex-suspend", "wait-fast-sema-suspend",
+            "wait-condvar-suspend", "hold-mutex-pending", "wait-dfc", "wait-hle"
+        };
+
+        for (auto &object : machine.sys()->get_kernel_system()->get_thread_list()) {
+            eka2l1::kernel::thread *thread = reinterpret_cast<eka2l1::kernel::thread *>(object.get());
+
+            if (!thread) {
+                continue;
+            }
+
+            const int state = static_cast<int>(thread->current_state());
+
+            std::printf("thread: %-28s %s\n", thread->name().c_str(),
+                ((state >= 0) && (state < 14)) ? STATES[state] : "?");
         }
     }
 

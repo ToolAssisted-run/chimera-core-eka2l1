@@ -42,13 +42,14 @@ static uintptr_t proc(mb_host *h, const char *n)
 int main(int argc, char **argv)
 {
 	const char *core = NULL, *rom = NULL, *game = NULL;
-	long frames = 60;
+	long frames = 60, timer_us = 0;
 	uint32_t run_uid = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
 		else if (!strcmp(argv[i], "--game") && i + 1 < argc) game = argv[++i];
+		else if (!strcmp(argv[i], "--timer-us") && i + 1 < argc) timer_us = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
@@ -105,6 +106,12 @@ int main(int argc, char **argv)
 	wbx_seal(h, &r);
 	if (r.error_message[0]) { fprintf(stderr, "seal: %s\n", r.error_message); return 1; }
 	wbx_activate_host(h, &r);
+
+	if (timer_us > 0) {
+		typedef void (MB_GUEST_ABI *timerfn)(int32_t);
+		timerfn SetTimerCheckUs = (timerfn)proc(h, "SetTimerCheckUs");
+		SetTimerCheckUs((int32_t)timer_us);
+	}
 
 	if (run_uid) {
 		typedef int (MB_GUEST_ABI *runfn)(uint32_t);
