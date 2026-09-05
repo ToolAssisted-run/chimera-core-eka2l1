@@ -1,0 +1,39 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index da1f4be87..aa795a834 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,6 +15,7 @@ endif()
+ 
+ set(EKA2L1_IOS_DEPLOYMENT_TARGET "16.0" CACHE STRING "Minimum iOS version to target")
+ 
++option(EKA2L1_BUILD_FRONTEND "Build the platform frontend (Qt on desktop, the app on Android and iOS). A library-only build - an embedder that drives system::loop() itself - turns it off." ON)
+ option(EKA2L1_BUILD_TOOLS "Build EKA2L1's tool" ON)
+ option(EKA2L1_BUILD_TESTS "Build EKA2L1's tests" ON)
+ option(EKA2L1_ENABLE_SCRIPTING_ABILITY "Enable to script with Python or Lua" ON)
+diff --git a/src/emu/CMakeLists.txt b/src/emu/CMakeLists.txt
+index bb725a4ae..072178877 100644
+--- a/src/emu/CMakeLists.txt
++++ b/src/emu/CMakeLists.txt
+@@ -53,13 +53,15 @@ add_subdirectory(system)
+ add_subdirectory(utils)
+ add_subdirectory(vfs)
+ 
+-if (ANDROID)
+-    include_directories(android/app/src/main)
+-    add_subdirectory(android/app/src/main/cpp)
+-elseif (EKA2L1_IOS)
+-    add_subdirectory(ios)
+-else()
+-    add_subdirectory(qt)
++if (EKA2L1_BUILD_FRONTEND)
++    if (ANDROID)
++        include_directories(android/app/src/main)
++        add_subdirectory(android/app/src/main/cpp)
++    elseif (EKA2L1_IOS)
++        add_subdirectory(ios)
++    else()
++        add_subdirectory(qt)
++    endif()
+ endif()
+ 
+ if (EKA2L1_ENABLE_SCRIPTING_ABILITY)

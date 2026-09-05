@@ -1,0 +1,48 @@
+diff --git a/src/emu/common/CMakeLists.txt b/src/emu/common/CMakeLists.txt
+index 147f2918e..54d736238 100644
+--- a/src/emu/common/CMakeLists.txt
++++ b/src/emu/common/CMakeLists.txt
+@@ -152,20 +152,31 @@ if (UNIX OR APPLE)
+     endif()
+ endif ()
+ 
+-execute_process(
+-        COMMAND git rev-parse --abbrev-ref HEAD
+-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+-        OUTPUT_VARIABLE GIT_BRANCH
+-        OUTPUT_STRIP_TRAILING_WHITESPACE
+-)
++# The version stamp describes THIS tree, not whatever repository happens to be
++# the top of the build: EKA2L1 can be added as a subdirectory of an embedder,
++# and CMAKE_SOURCE_DIR then names the embedder. Both values can also be given
++# on the command line, which is how a build without git (or a reproducible one)
++# gets a stamp.
++set(EKA2L1_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
++
++if (NOT DEFINED GIT_BRANCH)
++    execute_process(
++            COMMAND git rev-parse --abbrev-ref HEAD
++            WORKING_DIRECTORY ${EKA2L1_ROOT_DIR}
++            OUTPUT_VARIABLE GIT_BRANCH
++            OUTPUT_STRIP_TRAILING_WHITESPACE
++    )
++endif()
+ 
+ # Get the latest abbreviated commit hash of the working branch
+-execute_process(
+-        COMMAND git log -1 --format=%h
+-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+-        OUTPUT_VARIABLE GIT_COMMIT_HASH
+-        OUTPUT_STRIP_TRAILING_WHITESPACE
+-)
++if (NOT DEFINED GIT_COMMIT_HASH)
++    execute_process(
++            COMMAND git log -1 --format=%h
++            WORKING_DIRECTORY ${EKA2L1_ROOT_DIR}
++            OUTPUT_VARIABLE GIT_COMMIT_HASH
++            OUTPUT_STRIP_TRAILING_WHITESPACE
++    )
++endif()
+ 
+ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/common/configure.h.in
+         ${COMMON_GENERATED_INCLUDE_DIR}/common/configure.h)
