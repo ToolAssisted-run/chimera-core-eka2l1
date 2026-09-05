@@ -1,0 +1,78 @@
+diff --git a/src/emu/kernel/src/svc.cpp b/src/emu/kernel/src/svc.cpp
+index 39a1be1d5..6b37afcdf 100644
+--- a/src/emu/kernel/src/svc.cpp
++++ b/src/emu/kernel/src/svc.cpp
+@@ -5773,21 +5773,63 @@ namespace eka2l1::epoc {
+ 
+     BRIDGE_FUNC(std::int32_t, bus_dev_open_socket, const std::uint32_t unkpadding, epoc::desc16 *ldd_name,
+         epoc::desc16 *pdd_name) {
+-        if (ldd_name) {
+-            kernel::process *own_pr = kern->crr_process();
+-
+-            const std::u16string ldd_name_str = ldd_name->to_std_string(own_pr);
+-            std::u16string pdd_name_str;
++        if (!ldd_name) {
++            return epoc::error_argument;
++        }
+ 
+-            if (pdd_name)
+-                pdd_name_str = pdd_name->to_std_string(own_pr);
++        kernel::process *own_pr = kern->crr_process();
++        const std::u16string ldd_name_str = ldd_name->to_std_string(own_pr);
+ 
++        if (pdd_name) {
+             LOG_TRACE(KERNEL, "Ldd name: {}, Pdd name: {}", common::ucs2_to_utf8(ldd_name_str),
+-                common::ucs2_to_utf8(pdd_name_str));
++                common::ucs2_to_utf8(pdd_name->to_std_string(own_pr)));
+         }
+ 
+-        LOG_TRACE(KERNEL, "Busdev socket opening stubbed with number 0");
+-        return epoc::error_none;
++        // The EKA1 way of opening a logical device: the name arrives as the
++        // driver's, sometimes with its extension, and what comes back is a
++        // handle to a channel on it. This used to answer "fine" and hand back
++        // nothing, so every call the caller then made on the channel found no
++        // channel - which for a game that drives the screen through a driver
++        // means it simply stops.
++        const std::string name = common::lowercase_string(eka2l1::replace_extension(
++            eka2l1::filename(common::ucs2_to_utf8(ldd_name_str)), ""));
++
++        ldd::factory *factory = kern->get_by_name<ldd::factory>(name);
++
++        if (!factory) {
++            const auto factory_func = kern->suitable_ldd_instantiate_func(name.c_str());
++
++            if (!factory_func) {
++                LOG_TRACE(KERNEL, "Logical device {} is not emulated", name);
++                return epoc::error_not_found;
++            }
++
++            ldd::factory_instance factory_instance = factory_func(kern->get_system());
++            factory = kern->add_object(factory_instance);
++
++            if (!factory) {
++                return epoc::error_no_memory;
++            }
++
++            factory->install();
++        }
++
++        std::unique_ptr<ldd::channel> channel = factory->make_channel(epoc::version{});
++
++        if (!channel) {
++            return epoc::error_not_supported;
++        }
++
++        ldd::channel *added_channel = kern->add_object(channel);
++
++        if (!added_channel) {
++            return epoc::error_no_memory;
++        }
++
++        added_channel->set_owner(own_pr);
++
++        return kern->open_handle_with_thread(kern->crr_thread(), added_channel,
++            kernel::owner_type::process);
+     }
+ 
+     BRIDGE_FUNC(std::int32_t, logical_channel_do_control, const kernel::handle h, const int func,

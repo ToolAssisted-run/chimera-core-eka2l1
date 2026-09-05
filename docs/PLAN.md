@@ -350,12 +350,24 @@ descriptor and a thread, while tearing down. Asking is not using: the proxy answ
 "no" for a loop nobody built (0009), and a machine told it has no network refuses a
 socket rather than starting a loop for it (0020).
 
-**The game does not draw.** It stops in `wait_for_any_request` shortly after the
-kernel refuses `Lcd.LDD` - the N-Gage's direct-LCD logical device driver, which
-EKA2L1 does not implement (it has `videodriver`, `ekeyb`, `dhal`, `ecomm`,
-`gd1drv`, `cameraldd`). Holding a key does not wake it. That is the next thing to
-find out about, and it is upstream compatibility work rather than anything the core
-brings.
+**The game does not draw yet, and the trail is a real one.** It opens `Lcd.LDD`,
+the N-Gage's direct-LCD logical device driver, and then stops in
+`wait_for_any_request`. Two things were found behind that:
+
+- The EKA1 way of opening a logical device, `bus_dev_open_socket`, answered "fine"
+  and handed back nothing, so every call the caller made on the channel found no
+  channel. Patch 0021 opens a real channel from the factory and returns its handle,
+  the same way the EKA2 path already did.
+- `lcd` itself is still not emulated - EKA2L1 has `videodriver`, `ekeyb`, `dhal`,
+  `ecomm`, `gd1drv` and `cameraldd`. Registering the video driver under that name
+  was tried: the open then succeeds and the game gets 193 instructions further,
+  which is not a device driver, so it was not kept. A machine should not claim to
+  have a device it does not have.
+
+After the open the game creates a heap, switches to it and waits for a request that
+never comes; holding a key does not wake it. Writing a real `lcd` channel - one that
+hands the game the screen buffer chunk the emulator already creates for direct
+screen access - is the next thing to try.
 
 `.blz` remains out of reach: it needs a third-party installer app (BLZinstapp) run
 inside the machine, which needs the picture.
