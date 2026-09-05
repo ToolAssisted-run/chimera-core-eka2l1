@@ -14,7 +14,7 @@ GCCVER := $(shell gcc -dumpfullversion)
 EKA    := $(ROOT)/extern/eka2l1/src
 
 WBFLAGS := -fvisibility=hidden -mcmodel=large -mstack-protector-guard=global -fno-stack-protector \
-        -fno-pic -fno-pie -fcf-protection=none -O2 -std=gnu++20 \
+        -fno-pic -fno-pie -fcf-protection=none -O2 -g0 -std=gnu++20 \
         -DCHIMERA_CORE -DCHIMERA_GUEST -DDISABLE_LOGGING -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL \
         -Dthread_local= -D_Thread_local= -D__thread=
 SPECS   := -specs $(SR)/lib/musl-gcc.specs
