@@ -230,6 +230,16 @@ int main(int argc, char **argv)
 
 	u64fn GetAppCount = (u64fn)proc(h, "GetAppCount");
 
+	{
+		/* The project's own application starts itself; say which one, in
+		 * run-native's format, so the two can be compared. */
+		typedef uint32_t (MB_GUEST_ABI *u32fn)(void);
+		u32fn GetLaunchedAppUid = (u32fn)proc(h, "GetLaunchedAppUid");
+		const uint32_t launched = GetLaunchedAppUid();
+
+		if (launched) printf("launched: 0x%08x\n", launched);
+	}
+
 	/* The picture, in run-native's exact format. The machine draws it into
 	 * its own memory, so the sandbox has one without any OpenGL at all and
 	 * it must be the native reference's pixel for pixel. */

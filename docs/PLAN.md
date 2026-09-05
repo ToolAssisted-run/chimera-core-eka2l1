@@ -472,3 +472,24 @@ the other, since the two machines schedule differently.
 `run-native --cpu dynarmic` keeps the recompiler reachable for measurement. The
 core does not declare it as a setting, and `waterbox/build-difftest.sh` builds
 the harness that now gates the interpreter.
+
+## The game starts itself (2026-09-05)
+
+The core had a hole nobody had walked into: nothing started the game. `Init`
+booted the phone and installed the project's card, and then the machine sat
+there. The gate never saw it because both flavors were told `--run 0x101fd3d0`
+by hand, and the frontend has no such button to press: a chimera core is handed
+its files and expected to run.
+
+So `Init` starts it. Which application is the project's is not a question the
+registration can answer - on this EKA1 device every ROM application claims to
+have landed on drive C, whatever drive it is really on - so the machine notes
+which applications it had before the project's file arrived and starts the one
+that was not there before (lowest UID, so a card holding several always starts
+the same one). `LaunchAppUid` still exists for the gate's ROM-application legs,
+and answers rather than obeys when asked for the application already running.
+
+The card leg now passes no `--run` at all: the sandbox boots the phone, installs
+the card, starts Red Faction and draws it, and the native reference does exactly
+the same thing (`launched: 0x101fd3d0`, 219,242,497 instructions, screen
+7326d676ffda67e5 on both sides).

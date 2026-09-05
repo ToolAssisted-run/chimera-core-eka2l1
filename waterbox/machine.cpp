@@ -19,6 +19,8 @@
 #include <services/window/screen.h>
 #include <services/window/window.h>
 #include <package/manager.h>
+#include <services/applist/applist.h>
+#include <utils/apacmd.h>
 #include <vfs/vfs.h>
 #include <loader/rom.h>
 #include <system/devices.h>
@@ -382,6 +384,98 @@ namespace chimera {
 
         return eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
             eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
+    }
+
+    static eka2l1::applist_server *app_list(eka2l1::system *sys) {
+        eka2l1::kernel_system *kern = sys->get_kernel_system();
+
+        if (!kern) {
+            return nullptr;
+        }
+
+        return reinterpret_cast<eka2l1::applist_server *>(
+            kern->get_by_name<eka2l1::service::server>(
+                eka2l1::get_app_list_server_name_by_epocver(kern->get_epoc_version())));
+    }
+
+    bool machine::launch_app(const std::uint32_t uid) {
+        eka2l1::applist_server *applist = app_list(sys_.get());
+
+        if (!applist) {
+            return false;
+        }
+
+        eka2l1::apa_app_registry *registry = applist->get_registration(uid);
+
+        if (!registry) {
+            return false;
+        }
+
+        eka2l1::epoc::apa::command_line cmdline;
+        cmdline.launch_cmd_ = eka2l1::epoc::apa::command_create;
+
+        if (launched_uid_ == uid) {
+            // Already running. Starting it twice would be a second process,
+            // not a restart.
+            return true;
+        }
+
+        if (!applist->launch_app(*registry, cmdline, nullptr, nullptr)) {
+            return false;
+        }
+
+        launched_uid_ = uid;
+        return true;
+    }
+
+    void machine::remember_apps() {
+        eka2l1::applist_server *applist = app_list(sys_.get());
+
+        apps_before_install_.clear();
+
+        if (!applist) {
+            return;
+        }
+
+        for (const eka2l1::apa_app_registry &reg : applist->get_registerations()) {
+            apps_before_install_.push_back(reg.mandatory_info.uid);
+        }
+    }
+
+    std::uint32_t machine::launch_installed_app() {
+        eka2l1::applist_server *applist = app_list(sys_.get());
+
+        if (!applist) {
+            return 0;
+        }
+
+        // Which application is the project's? The one the machine did not have
+        // before it was given the project's file. The registration itself
+        // cannot be asked: on this EKA1 device every ROM application claims to
+        // have landed on drive C, whatever drive it is actually on.
+        //
+        // Lowest UID of the new ones, so a card holding more than one always
+        // starts the same one.
+        std::uint32_t chosen = 0;
+
+        for (const eka2l1::apa_app_registry &reg : applist->get_registerations()) {
+            const std::uint32_t uid = reg.mandatory_info.uid;
+
+            if (std::find(apps_before_install_.begin(), apps_before_install_.end(), uid)
+                != apps_before_install_.end()) {
+                continue;
+            }
+
+            if ((chosen == 0) || (uid < chosen)) {
+                chosen = uid;
+            }
+        }
+
+        if ((chosen == 0) || !launch_app(chosen)) {
+            return 0;
+        }
+
+        return chosen;
     }
 
     int machine::install_card(const std::string &archive_path) {

@@ -306,15 +306,15 @@ else
 				# is the machine's own memory, so the sandbox has a picture with
 				# no OpenGL anywhere and it must be the reference's pixel for
 				# pixel.
-				digest4='^(apps|run|instructions|drive entries|drive written|screen):'
+				digest4='^(apps|launched|instructions|drive entries|drive written|screen):'
 
 				rm -rf "$work/card"
 				mkdir -p "$work/card"
 
-				natc="$(timeout 1800 "$rn" --data "$work/card" --rom-only "$rom" --frames 1500 --card "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
-				boxc="$(timeout 1800 "$rw" "$core" --frames 1500 --rom "$rom" --game "$card" --run 0x101fd3d0 2>&1 | grep -E "$digest4" | sort)"
+				natc="$(timeout 1800 "$rn" --data "$work/card" --rom-only "$rom" --frames 1500 --card "$card" 2>&1 | grep -E "$digest4" | sort)"
+				boxc="$(timeout 1800 "$rw" "$core" --frames 1500 --rom "$rom" --game "$card" 2>&1 | grep -E "$digest4" | sort)"
 
-				if ! echo "$boxc" | grep -q "started"; then
+				if ! echo "$boxc" | grep -q "^launched: "; then
 					echo "FAIL card (the game did not start in the sandbox)"; echo "$boxc"; fail=$((fail + 1))
 				elif echo "$boxc" | grep -q "^screen: .* lit 0$"; then
 					echo "FAIL card (the game drew nothing)"; echo "$boxc"; fail=$((fail + 1))
@@ -324,7 +324,7 @@ else
 					echo "$boxc" > "$work/boxc.txt"
 					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
 				else
-					echo "PASS card: native == sandbox ($(echo "$boxc" | grep -E '^(instructions|screen):' | tr '\n' ' '))"
+					echo "PASS card: native == sandbox, the game started itself ($(echo "$boxc" | grep -E '^(launched|instructions|screen):' | tr '\n' ' '))"
 					pass=$((pass + 1))
 				fi
 
@@ -336,7 +336,7 @@ else
 				st="$work/card.state"
 				digest5='^(instructions|screen):'
 
-				half="$(timeout 1800 "$rw" "$core" --frames 600 --rom "$rom" --game "$card" --run 0x101fd3d0 --state-out "$st" 2>&1 | grep -E '^state out:')"
+				half="$(timeout 1800 "$rw" "$core" --frames 600 --rom "$rom" --game "$card" --state-out "$st" 2>&1 | grep -E '^state out:')"
 				rest="$(timeout 1800 "$rw" "$core" --frames 900 --rom "$rom" --game "$card" --state-in "$st" 2>&1 | grep -E "$digest5" | sort)"
 				whole="$(echo "$boxc" | grep -E "$digest5" | sort)"
 

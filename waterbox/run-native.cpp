@@ -257,6 +257,12 @@ int main(int argc, char **argv) {
     // exists once a device has been set.
     std::printf("memory: %s\n", machine.sys()->get_memory_system() ? "up" : "absent, no device");
 
+    // What the machine already had, so it can tell the project's own
+    // application from the phone's afterwards.
+    if (!install_path.empty() || !card_path.empty()) {
+        machine.remember_apps();
+    }
+
     if (!install_path.empty()) {
         // A package into the machine, the way the emulator's own installer
         // does it. Drive C is where a Symbian phone puts applications.
@@ -348,6 +354,16 @@ int main(int argc, char **argv) {
         }
     }
 
+    // The project's own application starts by itself, exactly as it does in
+    // the core: a machine that was given a game runs the game.
+    if (!card_path.empty() || !install_path.empty()) {
+        const std::uint32_t launched = machine.launch_installed_app();
+
+        if (launched != 0) {
+            std::printf("launched: 0x%08x\n", launched);
+        }
+    }
+
     if (list_apps || !run_path.empty()) {
         eka2l1::kernel_system *kern = machine.sys()->get_kernel_system();
         eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
@@ -360,7 +376,8 @@ int main(int argc, char **argv) {
             std::vector<eka2l1::apa_app_registry> &regs = applist->get_registerations();
 
             for (auto &reg : regs) {
-                std::printf("app 0x%08x: %s\n", reg.mandatory_info.uid,
+                std::printf("app 0x%08x drive %c: %s\n", reg.mandatory_info.uid,
+                    static_cast<char>('A' + static_cast<int>(reg.land_drive)),
                     eka2l1::common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr)).c_str());
             }
         }
@@ -375,14 +392,8 @@ int main(int argc, char **argv) {
 
             if (by_uid) {
                 const std::uint32_t uid = static_cast<std::uint32_t>(std::strtoul(run_path.c_str(), nullptr, 16));
-                eka2l1::apa_app_registry *registry = applist->get_registration(uid);
 
-                if (registry) {
-                    eka2l1::epoc::apa::command_line cmdline;
-                    cmdline.launch_cmd_ = eka2l1::epoc::apa::command_create;
-
-                    started = applist->launch_app(*registry, cmdline, nullptr, nullptr);
-                }
+                started = machine.launch_app(uid);
             } else {
                 eka2l1::process_ptr process = kern->spawn_new_process(
                     eka2l1::common::utf8_to_ucs2(run_path), u"");

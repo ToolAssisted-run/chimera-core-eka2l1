@@ -83,6 +83,32 @@ namespace chimera {
         // for. Returns the number of files written, 0 for "not a card".
         int install_card(const std::string &archive_path);
 
+        // Starts an application the way the machine's own launcher would -
+        // through its registration, not by opening a file. On EKA1 the
+        // executable behind a registration is not even the thing on disk that
+        // carries its name. Answers false when the machine has no such
+        // registration, or refuses it.
+        bool launch_app(std::uint32_t uid);
+
+        // Remembers which applications the machine already had. Call before
+        // installing anything: it is how the machine tells the project's own
+        // application from the phone's.
+        void remember_apps();
+
+        // Starts the application the project brought, and answers which one.
+        //
+        // A Symbian machine with nothing running is a phone showing its menu,
+        // and what a chimera project means by "the game" is the application
+        // the card or the package put there - the registration that was not
+        // there before. Zero when the project brought none, or when the
+        // machine would not start it.
+        std::uint32_t launch_installed_app();
+
+        // The application this machine started, or zero.
+        std::uint32_t launched_app() const {
+            return launched_uid_;
+        }
+
         // Installs a Symbian package into the machine, on drive C. The path
         // is a file the host mounted; what it writes goes into the machine's
         // own filesystem. Returns the emulator's own result code, 0 for
@@ -153,6 +179,12 @@ namespace chimera {
 
         std::unique_ptr<eka2l1::config::state> conf_;
         std::unique_ptr<eka2l1::config::app_settings> settings_;
+
+        // What launch_app() last started.
+        std::uint32_t launched_uid_ = 0;
+
+        // The applications the machine had before the project's own arrived.
+        std::vector<std::uint32_t> apps_before_install_;
         std::unique_ptr<eka2l1::system> sys_;
         std::shared_ptr<eka2l1::drivers::graphics_driver> gdriver_;
         std::shared_ptr<audio_sink> adriver_;

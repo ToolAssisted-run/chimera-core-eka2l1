@@ -67,6 +67,7 @@ namespace {
 
     std::shared_ptr<chimera::memory_file_system> g_drives;
     bool g_device = false;
+    std::uint32_t g_launched = 0;
 
     // The ROM, under the name a chimera host mounts a core's firmware by. It
     // says which device it is and it carries drive Z.
@@ -140,6 +141,10 @@ ECL_EXPORT int Init(void) {
         }
 
         if (game != nullptr) {
+            // What the machine already had, so it can tell the project's own
+            // application from the phone's afterwards.
+            g_machine->remember_apps();
+
             // A game card first - an archive holding a System\Apps tree - and
             // a Symbian package if it is not one.
             const int card_files = g_machine->install_card(game);
@@ -151,6 +156,11 @@ ECL_EXPORT int Init(void) {
             } else {
                 g_installed = g_machine->install_package(game);
             }
+
+            // And it starts. A phone with nothing running shows its menu, and
+            // a project that brought a game means the game: the frontend has
+            // no launcher to offer and the machine should not need one.
+            g_launched = g_machine->launch_installed_app();
         }
 
         g_device = true;
@@ -298,6 +308,13 @@ ECL_EXPORT int LaunchAppUid(std::uint32_t uid) {
         return 0;
     }
 
+    // Init starts the project's own application. Asking for that one again is
+    // answered rather than obeyed: a second copy of a running game would be a
+    // second process, not a restart.
+    if (uid == g_launched) {
+        return 1;
+    }
+
     eka2l1::kernel_system *kern = g_machine->sys()->get_kernel_system();
     eka2l1::applist_server *applist = reinterpret_cast<eka2l1::applist_server *>(
         kern->get_by_name<eka2l1::service::server>(
@@ -317,6 +334,11 @@ ECL_EXPORT int LaunchAppUid(std::uint32_t uid) {
     cmdline.launch_cmd_ = eka2l1::epoc::apa::command_create;
 
     return applist->launch_app(*registry, cmdline, nullptr, nullptr) ? 1 : 0;
+}
+
+// Which application the machine started for itself, or zero.
+ECL_EXPORT std::uint32_t GetLaunchedAppUid(void) {
+    return g_launched;
 }
 
 ECL_EXPORT std::uint64_t GetAppCount(void) {
