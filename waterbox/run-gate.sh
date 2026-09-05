@@ -163,6 +163,41 @@ else
 			pass=$((pass + 1))
 		fi
 
+		# A storage root holding only the ROM: everything below runs against
+		# the ROM and the descriptor, the way a core will.
+		python3 "$here/gen-device-info.py" --storage "$work/device" --out "$work/device.info" > /dev/null
+		rm -rf "$work/romonly"
+		mkdir -p "$work/romonly/roms/nem-4"
+		cp "$work/device/roms/nem-4/SYM.ROM" "$work/romonly/roms/nem-4/"
+
+		# ---- the machine on a real OpenGL context ---------------------------
+		# The emulator's renderer runs on a context the harness made and never
+		# on one of its own, its command lists run on the stepping thread
+		# rather than on a thread of the driver's, and the screen is composed
+		# on demand and read back. What it draws is not yet a picture - see
+		# docs/PLAN.md - but the size, the digest and the path are the
+		# machine's, and they must be the same every time.
+		gpu() {
+			rm -rf "$work/gpu"
+			cp -r "$work/romonly" "$work/gpu"
+			timeout 900 "$rn" --data "$work/gpu" --device "$work/device.info" --gpu 				--frames 120 --run 0x10005902 2>/dev/null | grep -E '^(gpu|screen|instructions):'
+		}
+
+		one_gpu="$(gpu)"
+		two_gpu="$(gpu)"
+
+		if ! echo "$one_gpu" | grep -q "^gpu: on"; then
+			echo "SKIP gpu: no OpenGL context here"
+		elif ! echo "$one_gpu" | grep -q "^screen: "; then
+			echo "FAIL gpu (the machine composed no screen)"; echo "$one_gpu"; fail=$((fail + 1))
+		elif [ "$one_gpu" != "$two_gpu" ]; then
+			echo "FAIL gpu (two runs disagree)"
+			echo "--- first"; echo "$one_gpu"; echo "--- second"; echo "$two_gpu"; fail=$((fail + 1))
+		else
+			echo "PASS gpu: $(echo "$one_gpu" | grep '^screen:')"
+			pass=$((pass + 1))
+		fi
+
 		# ---- the device inside the sandbox ---------------------------------
 		# Two files cross into the box: the ROM, under the name the emulator
 		# opens it by, and a fifty-seven byte descriptor saying which device it
@@ -172,14 +207,6 @@ else
 		if [ ! -x "$rw" ] || [ ! -f "$core" ]; then
 			echo "SKIP in-box: core.wbx not built"
 		else
-			python3 "$here/gen-device-info.py" --storage "$work/device" --out "$work/device.info" > /dev/null
-
-			# The native side gets a storage root holding only the ROM, so the
-			# two runs differ in nothing but the sandbox.
-			rm -rf "$work/romonly"
-			mkdir -p "$work/romonly/roms/nem-4"
-			cp "$work/device/roms/nem-4/SYM.ROM" "$work/romonly/roms/nem-4/"
-
 			digest2='^(apps|run|virtual us|instructions):'
 			# Sorted: the two report the same facts, not necessarily in the
 			# same order - one learns the application count while booting, the

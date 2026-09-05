@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace eka2l1 {
     class system;
@@ -12,6 +13,10 @@ namespace eka2l1 {
     namespace config {
         class app_settings;
         struct state;
+    }
+
+    namespace drivers {
+        class graphics_driver;
     }
 }
 
@@ -39,6 +44,10 @@ namespace chimera {
         // The drives come from the machine's own memory rather than from
         // directories on a host: the sandbox has neither. See memfs.h.
         bool in_memory_drives = false;
+
+        // Draw. The context is the embedder's (gl-context.h) and the driver is
+        // driven from this loop rather than from a thread of its own.
+        bool graphics = false;
     };
 
     // The emulator, its clock, and the loop that drives both. Everything a core
@@ -64,6 +73,21 @@ namespace chimera {
         // done, against a filesystem the caller owns.
         void boot();
 
+        // Builds the graphics driver on a context the embedder has already
+        // made current, and gives it to the machine. Call after startup() and
+        // before the device is set: the window server asks for a driver as it
+        // is created.
+        void start_graphics(void *(*loader)(const char *name));
+
+        bool has_graphics() const {
+            return gdriver_ != nullptr;
+        }
+
+        // The screen as the window server last composited it. False when the
+        // machine has no screen yet - before a device, or before the window
+        // server has made one.
+        bool read_screen(std::vector<std::uint32_t> &out, int &width, int &height);
+
         // Runs the machine until its own clock has moved `us` forward. Returns
         // the number of times the emulator's loop was entered, which is a
         // property of the machine and not of the host.
@@ -86,6 +110,7 @@ namespace chimera {
         std::unique_ptr<eka2l1::config::state> conf_;
         std::unique_ptr<eka2l1::config::app_settings> settings_;
         std::unique_ptr<eka2l1::system> sys_;
+        std::shared_ptr<eka2l1::drivers::graphics_driver> gdriver_;
 
         // Instructions the emulator reported during the loop() call in flight.
         std::uint32_t slice_instructions_;

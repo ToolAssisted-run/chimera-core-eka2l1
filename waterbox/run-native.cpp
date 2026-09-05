@@ -13,6 +13,10 @@
 #include "memfs.h"
 
 #include <common/log.h>
+
+extern "C" int chimera_egl_make_context(char *err, int errlen);
+extern "C" void *chimera_egl_proc(const char *name);
+
 #include <common/cvt.h>
 #include <kernel/kernel.h>
 #include <kernel/timing.h>
@@ -33,6 +37,31 @@
 #include <thread>
 
 namespace {
+    // A picture, for looking at rather than for the gate.
+    bool write_tga(const char *path, const std::uint32_t *bgra, const int w, const int h) {
+        std::FILE *f = std::fopen(path, "wb");
+
+        if (!f) {
+            return false;
+        }
+
+        std::uint8_t header[18] = { 0 };
+
+        header[2] = 2;
+        header[12] = w & 0xff;
+        header[13] = (w >> 8) & 0xff;
+        header[14] = h & 0xff;
+        header[15] = (h >> 8) & 0xff;
+        header[16] = 32;
+        header[17] = 0x20;
+
+        std::fwrite(header, 1, sizeof(header), f);
+        std::fwrite(bgra, 4, static_cast<std::size_t>(w) * h, f);
+        std::fclose(f);
+
+        return true;
+    }
+
     // Drives served from memory have no host path, so they cannot be mounted
     // through mount_physical_path and nothing announces them. The application
     // list only scans a drive it has been told about.
@@ -57,6 +86,8 @@ int main(int argc, char **argv) {
     std::string device_info_path;
     bool print_rom_path = false;
     bool verbose = false;
+    bool gpu = false;
+    std::string screen_out;
 
     for (int i = 1; i < argc; i++) {
         const bool has_value = (i + 1 < argc);
@@ -77,6 +108,10 @@ int main(int argc, char **argv) {
             probe_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--device") == 0) && has_value) {
             device_info_path = argv[++i];
+        } else if (std::strcmp(argv[i], "--gpu") == 0) {
+            gpu = true;
+        } else if ((std::strcmp(argv[i], "--screen-out") == 0) && has_value) {
+            screen_out = argv[++i];
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
         } else if (std::strcmp(argv[i], "--print-rom-path") == 0) {
@@ -125,6 +160,18 @@ int main(int argc, char **argv) {
     // device to boot afterwards is a separate question, and the answer to it is
     // the user's to supply.
     machine.startup();
+
+    if (gpu) {
+        char err[256] = { 0 };
+
+        if (!chimera_egl_make_context(err, sizeof(err))) {
+            std::fprintf(stderr, "no OpenGL context: %s\n", err);
+            return 1;
+        }
+
+        machine.start_graphics(chimera_egl_proc);
+        std::printf("gpu: %s\n", machine.has_graphics() ? "on" : "refused");
+    }
 
     if (drives) {
         eka2l1::file_system_inst as_instance = drives;
@@ -345,6 +392,38 @@ int main(int argc, char **argv) {
 
         if (sleep_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        }
+    }
+
+    if (gpu) {
+        // What the machine drew. The digest is over the pixels the window
+        // server last composited, and the lit count is the shortest way to say
+        // whether anything reached the screen at all.
+        std::vector<std::uint32_t> screen;
+        int width = 0;
+        int height = 0;
+
+        if (!machine.read_screen(screen, width, height)) {
+            std::printf("screen: none\n");
+        } else {
+            std::uint64_t digest = 1469598103934665603ull;
+            std::size_t lit = 0;
+
+            for (const std::uint32_t pixel : screen) {
+                digest ^= pixel;
+                digest *= 1099511628211ull;
+
+                if ((pixel & 0x00FFFFFF) != 0) {
+                    lit++;
+                }
+            }
+
+            std::printf("screen: %dx%d digest %016llx lit %zu\n", width, height,
+                static_cast<unsigned long long>(digest), lit);
+
+            if (!screen_out.empty()) {
+                write_tga(screen_out.c_str(), screen.data(), width, height);
+            }
         }
     }
 

@@ -164,7 +164,9 @@ networking, no real audio or input devices.
   and the device boots inside the sandbox from its ROM and a fifty-seven byte
   descriptor: 58 applications found, the machine's own menu launched, and native ==
   sandbox to the instruction (682,640 of them).
-- **M4 - the picture.** The command list pumped inline, the ogl backend fed by the GL
+- **M4 - the picture. STARTED 2026-09-05**: the context, the inline driver and the
+  readback all work; what the machine composes is still blank. See above.
+- **M4 (was) - the picture.** The command list pumped inline, the ogl backend fed by the GL
   bridge, `read_bitmap` into the frame buffer. Proof: the composited screen matches the
   native reference's pixels.
 - **M5 - input, audio, and a game.** Keys through the N-Gage keypad map, the audio sink,
@@ -255,6 +257,36 @@ descriptor** naming the device and its Symbian version - no unpacked drive Z at
 all. Drive Z is the ROM's; C, D and E are the machine's own memory. Native and
 sandbox run the machine's menu to the same 682,640 instructions, and the extracted
 copy no longer changes the answer on either side.
+
+## The machine on a real OpenGL context (M4, 2026-09-05, unfinished)
+
+Patch 0017 gives the emulator's renderer three things an embedder has to bring:
+
+- **The context is the embedder's.** `graphics::set_gl_context_factory` and
+  `set_gl_proc_loader`: a build with no window system has no context backend, and a
+  core has a context already, made and current. The glue's `borrowed_gl_context`
+  (`waterbox/gl-context.cpp`) is honest about what that means - making it current
+  is nothing to do, swapping buffers is nothing to do - and the native reference
+  makes the context with EGL's surfaceless platform (`waterbox/gl-egl.c`).
+- **The driver runs on the stepping thread.** `driver::pump()` runs what is queued
+  and returns, where `run()` is a loop that owns a thread.
+- **A driven driver answers its own synchronous commands.** `send_sync_command`
+  submits and then waits on a condition the graphics thread signals; with no such
+  thread that waits for nobody, so `driver::set_driven(true)` makes it pump
+  instead. `read_bitmap` is one of those commands, and reading the screen is the
+  whole point.
+
+The path works end to end: the driver is created, the machine's window server
+makes its 176x208 screen, the screen is composed on demand
+(`scan_for_redraw(..., force)`) and read back through the command list, and two
+runs give the same digest.
+
+**What is missing is the picture.** The screen reads back all zeroes: the
+compositor draws nothing into it. The AVKON shell is alive - it logs a status pane
+redraw - but the window server also complains "Region object's header data size is
+not 4 bytes" on this EKA1 device, and the menu application stops at an
+unimplemented application-list opcode. That is upstream compatibility with this
+particular ROM rather than anything the core brings, and it is where M4 continues.
 
 ## Open questions
 

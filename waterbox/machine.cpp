@@ -1,10 +1,17 @@
 #include "machine.h"
+#include "gl-context.h"
 #include "host-ui.h"
 
 #include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
+#include <drivers/graphics/graphics.h>
+#include <drivers/itc.h>
+#include <kernel/kernel.h>
 #include <kernel/timing.h>
+#include <services/window/scheduler.h>
+#include <services/window/screen.h>
+#include <services/window/window.h>
 #include <package/manager.h>
 #include <system/devices.h>
 #include <system/epoc.h>
@@ -72,6 +79,73 @@ namespace chimera {
         sys_->get_ntimer()->reset();
     }
 
+    void machine::start_graphics(void *(*loader)(const char *name)) {
+        install_borrowed_gl(loader);
+
+        eka2l1::drivers::window_system_info info;
+        gdriver_ = eka2l1::drivers::create_graphics_driver(eka2l1::drivers::graphic_api::opengl, info);
+
+        if (!gdriver_) {
+            return;
+        }
+
+        // Nothing else will run its command lists: this loop does, between the
+        // machine's own steps.
+        gdriver_->set_driven(true);
+
+        // The driver calls this after every present. There is no window to
+        // present into and nothing to poll, but an unset std::function throws
+        // when called, and the machine does present.
+        gdriver_->set_display_hook([]() {});
+
+        sys_->set_graphics_driver(gdriver_.get());
+    }
+
+    bool machine::read_screen(std::vector<std::uint32_t> &out, int &width, int &height) {
+        if (!gdriver_) {
+            return false;
+        }
+
+        eka2l1::kernel_system *kern = sys_->get_kernel_system();
+
+        if (!kern) {
+            return false;
+        }
+
+        eka2l1::window_server *winserv = reinterpret_cast<eka2l1::window_server *>(
+            kern->get_by_name<eka2l1::service::server>(
+                eka2l1::get_winserv_name_by_epocver(sys_->get_symbian_version_use())));
+
+        if (!winserv) {
+            return false;
+        }
+
+        // Compose what the machine has drawn so far. Nothing else will ask:
+        // the window server redraws on its own schedule for a display that is
+        // watching, and here the only watcher is whoever called this.
+        winserv->get_anim_scheduler()->scan_for_redraw(gdriver_.get(), 0, true);
+        gdriver_->pump();
+
+        eka2l1::epoc::screen *scr = winserv->get_screen(0);
+
+        if (!scr || !scr->screen_texture) {
+            return false;
+        }
+
+        const eka2l1::vec2 size = scr->size();
+
+        if ((size.x <= 0) || (size.y <= 0)) {
+            return false;
+        }
+
+        width = size.x;
+        height = size.y;
+        out.resize(static_cast<std::size_t>(width) * height);
+
+        return eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
+            eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
+    }
+
     std::size_t machine::device_count() const {
         return sys_->get_device_manager()->total();
     }
@@ -137,6 +211,11 @@ namespace chimera {
             // Dialogs raised during the slice are answered here, outside the
             // kernel lock the caller was holding.
             pump_host_ui();
+
+            // And whatever the machine asked to be drawn.
+            if (gdriver_) {
+                gdriver_->pump();
+            }
 
             // Fire whatever the instructions just bought, and learn when the
             // next deadline is.

@@ -11,8 +11,8 @@ add_subdirectory(${CHIMERA_EKA2L1_ROOT}/extern/eka2l1 eka2l1)
 
 # The reference harness: the emulator built, questioned and torn down by an
 # embedder, with no frontend and no host devices.
-add_executable(run-native run-native.cpp host-ui.cpp machine.cpp vclock.cpp memfs.cpp)
-target_link_libraries(run-native PRIVATE epoc epockern epocpkg epocservs epocutils drivers config common)
+add_executable(run-native run-native.cpp host-ui.cpp machine.cpp vclock.cpp memfs.cpp gl-context.cpp gl-egl.c)
+target_link_libraries(run-native PRIVATE epoc epockern epocpkg epocservs epocutils drivers config common EGL)
 
 # Provisioning: a Symbian ROM dump becomes an installed device under a storage
 # root. It runs once, outside the machine.

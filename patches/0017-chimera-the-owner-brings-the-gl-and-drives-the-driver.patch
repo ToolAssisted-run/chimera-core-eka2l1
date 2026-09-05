@@ -1,0 +1,212 @@
+diff --git a/src/emu/drivers/include/drivers/driver.h b/src/emu/drivers/include/drivers/driver.h
+index 4bf1fe8e4..6bb9e43eb 100644
+--- a/src/emu/drivers/include/drivers/driver.h
++++ b/src/emu/drivers/include/drivers/driver.h
+@@ -98,18 +98,55 @@ namespace eka2l1::drivers {
+     };
+ 
+     class driver {
++        bool driven_ = false;
++
+     public:
+         std::mutex mut_;
+         std::condition_variable cond_;
+ 
+         virtual ~driver() {}
+         virtual void run() = 0;
++
++        /**
++         * @brief Do the work that is waiting, and return.
++         *
++         * run() is a loop that owns its thread. An owner that already has one -
++         * a core stepping a machine, a test - calls this between its own steps
++         * instead, and the driver never needs a thread of its own.
++         */
++        virtual void pump() {
++        }
++
++        /**
++         * @brief Let the owner drive this instead of a thread of its own.
++         *
++         * A driven driver never has a thread waiting on its queue, so nothing
++         * would ever answer a caller that submitted work and waited. Callers
++         * pump it instead and read the answer straight afterwards.
++         *
++         * Set it before the driver is given any work.
++         */
++        void set_driven(const bool driven) {
++            driven_ = driven;
++        }
++
++        bool driven() const {
++            return driven_;
++        }
++
+         virtual void abort() = 0;
+         virtual bool aborted() const {
+             return false;
+         }
+ 
+         virtual void wait_for(int *status) {
++            if (driven_) {
++                // Nobody else is going to run it: the thread that submitted
++                // the work is the thread that does it.
++                pump();
++                return;
++            }
++
+             std::unique_lock<std::mutex> ulock(mut_);
+ 
+             if (*status == 0) {
+diff --git a/src/emu/drivers/include/drivers/graphics/backend/ogl/graphics_ogl.h b/src/emu/drivers/include/drivers/graphics/backend/ogl/graphics_ogl.h
+index 205849b84..beafd8661 100644
+--- a/src/emu/drivers/include/drivers/graphics/backend/ogl/graphics_ogl.h
++++ b/src/emu/drivers/include/drivers/graphics/backend/ogl/graphics_ogl.h
+@@ -209,6 +209,7 @@ namespace eka2l1::drivers {
+         void submit_command_list(command_list &cmd_list) override;
+ 
+         void run() override;
++        void pump() override;
+         void abort() override;
+         void dispatch(command &cmd) override;
+         void bind_swapchain_framebuf() override;
+diff --git a/src/emu/drivers/include/drivers/graphics/context.h b/src/emu/drivers/include/drivers/graphics/context.h
+index aadd6ed87..50988ae4e 100644
+--- a/src/emu/drivers/include/drivers/graphics/context.h
++++ b/src/emu/drivers/include/drivers/graphics/context.h
+@@ -22,6 +22,7 @@
+ 
+ #include <array>
+ #include <cstdint>
++#include <functional>
+ #include <memory>
+ #include <tuple>
+ 
+@@ -78,4 +79,25 @@ namespace eka2l1::drivers::graphics {
+     };
+ 
+     std::unique_ptr<gl_context> make_gl_context(const drivers::window_system_info &system_info, const bool stereo = false, const bool core = true);
++
++    /**
++     * @brief The embedder's own OpenGL.
++     *
++     * A build with no window system has no context backend to offer, and a
++     * build that runs inside something else - a core in a sandbox, a test
++     * harness - has a context already: made, current, and not the emulator's
++     * to create. Both hand one over here, along with the loader its entry
++     * points come from, and the graphics driver uses them exactly as it would
++     * its own.
++     *
++     * Install before the graphics driver is created. An empty factory or a
++     * null loader restores the platform's own.
++     */
++    using gl_context_factory = std::function<std::unique_ptr<gl_context>(
++        const drivers::window_system_info &system_info, const bool stereo, const bool core)>;
++    using gl_proc_loader = void *(*)(const char *name);
++
++    void set_gl_context_factory(gl_context_factory factory);
++    void set_gl_proc_loader(gl_proc_loader loader);
++    gl_proc_loader get_gl_proc_loader();
+ }
+diff --git a/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp b/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp
+index 779734a98..467865f94 100644
+--- a/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp
++++ b/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp
+@@ -55,7 +55,18 @@ namespace eka2l1::drivers {
+     void init_gl_graphics_library(graphics::gl_context::mode api) {
+         switch (api) {
+             case graphics::gl_context::mode::opengl: {
+-                gladLoadGL();
++                // An embedder that brought its own context brings the loader
++                // its entry points come from too: the driver it is running on
++                // may not be the one this process would find by itself.
++                if (graphics::gl_proc_loader loader = graphics::get_gl_proc_loader()) {
++                    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(loader))) {
++                        LOG_CRITICAL(DRIVER_GRAPHICS, "gladLoadGLLoader() failed");
++                        return;
++                    }
++                } else {
++                    gladLoadGL();
++                }
++
+                 break;
+             }
+ 
+@@ -1939,6 +1950,26 @@ namespace eka2l1::drivers {
+         }
+     }
+ 
++    void ogl_graphics_driver::pump() {
++        // Everything queued, and not a moment more. An owner with a loop of
++        // its own runs the driver between its own steps rather than giving it
++        // a thread: one microsecond is the shortest wait the queue takes, and
++        // it is only ever reached when the queue is already empty.
++        while (!should_stop) {
++            std::optional<command_list> list = list_queue.pop(1);
++
++            if (!list) {
++                return;
++            }
++
++            for (std::size_t i = 0; i < list->size_; i++) {
++                dispatch(list->base_[i]);
++            }
++
++            delete[] list->base_;
++        }
++    }
++
+     void ogl_graphics_driver::run() {
+         while (!should_stop) {
+             std::optional<command_list> list = list_queue.pop();
+diff --git a/src/emu/drivers/src/graphics/context.cpp b/src/emu/drivers/src/graphics/context.cpp
+index 7f130ffa0..932754f0b 100644
+--- a/src/emu/drivers/src/graphics/context.cpp
++++ b/src/emu/drivers/src/graphics/context.cpp
+@@ -45,7 +45,26 @@ namespace eka2l1::drivers::graphics {
+     const std::array<std::pair<int, int>, 11> gl_context::s_desktop_opengl_versions = {
+         {{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0}, {3, 3}, {3, 2}, {3, 1}, {3, 0} }};
+ 
++    static gl_context_factory g_context_factory;
++    static gl_proc_loader g_proc_loader = nullptr;
++
++    void set_gl_context_factory(gl_context_factory factory) {
++        g_context_factory = std::move(factory);
++    }
++
++    void set_gl_proc_loader(gl_proc_loader loader) {
++        g_proc_loader = loader;
++    }
++
++    gl_proc_loader get_gl_proc_loader() {
++        return g_proc_loader;
++    }
++
+     std::unique_ptr<gl_context> make_gl_context(const drivers::window_system_info &system_info, const bool stereo, const bool core) {
++        if (g_context_factory) {
++            return g_context_factory(system_info, stereo, core);
++        }
++
+ #if EKA2L1_NO_HOST_DEVICES
+         (void)system_info;
+         (void)stereo;
+diff --git a/src/emu/drivers/src/itc.cpp b/src/emu/drivers/src/itc.cpp
+index e827226fb..766e395aa 100644
+--- a/src/emu/drivers/src/itc.cpp
++++ b/src/emu/drivers/src/itc.cpp
+@@ -42,6 +42,15 @@ namespace eka2l1::drivers {
+         cmd_list.size_ = 1;
+         *cmd_list.base_ = cmd;
+ 
++        if (drv->driven()) {
++            // No thread is waiting on the queue, so waiting here would wait
++            // for nobody. Submit, run it, and the answer is already in.
++            drv->submit_command_list(cmd_list);
++            drv->pump();
++
++            return status;
++        }
++
+         std::unique_lock<std::mutex> ulock(drv->mut_);
+         drv->submit_command_list(cmd_list);
+         drv->cond_.wait(ulock, [&]() { return status != -100; });
