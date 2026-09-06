@@ -773,7 +773,11 @@ int main(int argc, char **argv) {
                     eka2l1::epoc::canvas_base *canvas =
                         reinterpret_cast<eka2l1::epoc::canvas_base *>(win);
 
-                    std::printf("window: %4d %-8s %s%s%s rect %dx%d+%d+%d regions %zu\n", win->id,
+                    const eka2l1::epoc::bitmap_backed_canvas *bb =
+                        dynamic_cast<const eka2l1::epoc::bitmap_backed_canvas *>(canvas);
+
+                    std::printf("window: %4d %-9s %-8s %s%s%s rect %dx%d+%d+%d regions %zu\n", win->id,
+                        bb ? (bb->bitmap_ ? "bitmap" : "bitmapless") : "redraw",
                         canvas->is_visible() ? "visible" : "hidden",
                         (canvas->flags & eka2l1::epoc::window::flags_active) ? "active " : "inert  ",
                         (canvas->flags & eka2l1::epoc::window::flags_visible) ? "shown " : "unshown",
