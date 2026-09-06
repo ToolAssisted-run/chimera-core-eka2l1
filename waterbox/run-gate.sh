@@ -306,7 +306,7 @@ else
 				# is the machine's own memory, so the sandbox has a picture with
 				# no OpenGL anywhere and it must be the reference's pixel for
 				# pixel.
-				digest4='^(apps|launched|instructions|drive entries|drive written|screen):'
+				digest4='^(apps|launched|instructions|drive entries|drive written|screen|bus body):'
 
 				rm -rf "$work/card"
 				mkdir -p "$work/card"
@@ -325,6 +325,37 @@ else
 					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
 				else
 					echo "PASS card: native == sandbox, the game started itself ($(echo "$boxc" | grep -E '^(launched|instructions|screen):' | tr '\n' ' '))"
+					pass=$((pass + 1))
+				fi
+
+				# ---- the machine's memory can be watched ----------------
+				# A chimera bus: an address space rather than a block, because
+				# Symbian memory IS an address space - every chunk has its own
+				# mapping, and a game's chunks do not exist until it has run, so
+				# there is no pointer and size to hand over once. The body of
+				# the game's heap must hold something, and must hold the same
+				# thing in both flavors.
+				#
+				# The whole space is NOT compared: the emulator keeps a little
+				# of its own bookkeeping inside guest chunks - host pointers,
+				# eight bytes wide - and those differ between a native process
+				# and a sandbox by construction. A hundred and thirty-four bytes
+				# of sixty-seven million, all of them at a chunk's base.
+				digest7='^bus body:'
+
+				natb="$(echo "$natc" | grep -E "$digest7")"
+				boxb="$(echo "$boxc" | grep -E "$digest7")"
+
+				if [ -z "$boxb" ]; then
+					echo "FAIL bus (the sandbox read no memory)"; fail=$((fail + 1))
+				elif echo "$boxb" | grep -q "nonzero 0$"; then
+					echo "FAIL bus (the game's heap reads as nothing)"; echo "$boxb"; fail=$((fail + 1))
+				elif [ "$natb" != "$boxb" ]; then
+					echo "FAIL bus (native vs sandbox)"
+					echo "  native:  $natb"
+					echo "  sandbox: $boxb"; fail=$((fail + 1))
+				else
+					echo "PASS bus: the game's memory reads the same in both ($boxb)"
 					pass=$((pass + 1))
 				fi
 

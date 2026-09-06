@@ -268,6 +268,53 @@ ECL_EXPORT int GetMemoryDomainWritable(std::int32_t) {
     return 0;
 }
 
+// ---- the machine's memory, as an address space -----------------------------
+//
+// Not a block: Symbian gives every chunk its own mapping and a game's chunks do
+// not exist until it has run, so there is nothing whose address and size could
+// be handed over once and stay true. A bus is resolved per access instead, in
+// the address space of the application this machine started.
+//
+// Sixty-four megabytes from zero: EKA1 puts a process's own memory at
+// 0x00400000 and gives it the space below the shared region, and every chunk
+// this game makes lands in the first few. Addresses are the machine's own, so
+// what a watch says is what a debugger would say.
+namespace {
+    constexpr std::int64_t USER_BUS_SIZE = 0x04000000;
+}
+
+ECL_EXPORT std::int32_t GetBusCount(void) {
+    return g_device ? 1 : 0;
+}
+
+ECL_EXPORT const char *GetBusName(std::int32_t) {
+    return "User RAM";
+}
+
+ECL_EXPORT std::int64_t GetBusSize(std::int32_t) {
+    return USER_BUS_SIZE;
+}
+
+ECL_EXPORT std::int32_t GetBusWritable(std::int32_t) {
+    return 1;
+}
+
+ECL_EXPORT std::int32_t PeekBus(std::int32_t bus, std::int32_t addr) {
+    if (!g_inited || (bus != 0) || (addr < 0) || (addr >= USER_BUS_SIZE)) {
+        return 0;
+    }
+
+    return g_machine->peek_user(static_cast<std::uint32_t>(addr));
+}
+
+ECL_EXPORT void PokeBus(std::int32_t bus, std::int32_t addr, std::int32_t value) {
+    if (!g_inited || (bus != 0) || (addr < 0) || (addr >= USER_BUS_SIZE)) {
+        return;
+    }
+
+    g_machine->poke_user(static_cast<std::uint32_t>(addr), static_cast<std::uint8_t>(value));
+}
+
 ECL_EXPORT int GetVsyncNumerator(void) {
     return 60;
 }

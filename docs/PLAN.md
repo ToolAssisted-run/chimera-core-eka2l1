@@ -526,3 +526,45 @@ The core was also run the way a user will run it: a hand-written
 screen at frame 1499 and the menu at 3000, and a movie that holds Down at 3000
 moves the selection. That is the whole path - project, engine, package, sandbox,
 picture, input - with nothing of the harness in it.
+
+## Memory for the watch tools (2026-09-06)
+
+A chimera core normally hands the frontend a pointer and a size per memory
+domain, once, straight after `Init`. Symbian memory cannot be described that
+way and the reason is worth writing down: **there is no block**. The memory
+model gives every chunk its own host mapping, so "the machine's RAM" is a set of
+mappings rather than a region - and a game's chunks do not exist at `Init` at
+all. `Init` launches the application, but launching only makes the process and
+its first thread; nothing has run, and Red Faction's heap (32 MiB reserved at
+0x00700000, about 7 MiB of it committed once it has loaded) appears somewhere in
+the first few hundred frames. A pointer captured at `Init` would point at
+nothing.
+
+So the core declares a **bus** instead - the optional tooling ABI's address
+space, resolved per access - and the frontend turns it into a callback-backed
+domain that behaves like any other in the hex editor and the watch tools.
+`PeekBus`/`PokeBus` resolve each address through the page tables of the
+application this machine started (the asid is taken at launch, not looked up per
+access: by the time anybody asks, the current thread is as likely to be the
+window server's as the game's). Sixty-four megabytes from zero, which is where
+EKA1 puts a process's own memory and everything this game maps. Addresses are
+the machine's own, so a watch address is what a debugger would call it.
+
+One page of translation is cached. A search walks addresses in order, so all but
+one byte in four thousand is answered without touching the page tables: reading
+the whole 64 MiB space costs about a third of a second.
+
+**What the bus found:** the emulator keeps a little of its own bookkeeping inside
+guest chunks. Eight-byte host pointers, at the base of the chunks it allocates
+through - 134 bytes of the 67 million, at six chunk bases. They are the only
+thing in the machine's memory that differs between a native process and the
+sandbox, and they differ by construction rather than by accident. The gate
+therefore compares the BODY of the game's heap (0x00701000 to 0x02A00000), which
+holds nine tenths of everything the machine has written and matches exactly:
+`bus body: digest d3f20d577255bb28 nonzero 788881`, both flavors.
+
+The exports ship in `core.wbx` (`GetBusCount`, `GetBusName`, `GetBusSize`,
+`GetBusWritable`, `PeekBus`, `PokeBus`) and the gate drives them through the
+same address-resolution the engine uses. What is NOT yet proven is the frontend
+half: `chimera-run --dump` only knows the pointer-backed domains, so a bus
+cannot be dumped headlessly without a change to chimera itself.

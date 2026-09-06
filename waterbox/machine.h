@@ -109,6 +109,17 @@ namespace chimera {
             return launched_uid_;
         }
 
+        // The game's own memory, one byte at a time.
+        //
+        // Symbian memory is not a block: the memory model gives every chunk its
+        // own mapping, and a game's chunks do not exist until it has run. So
+        // the machine offers an ADDRESS SPACE rather than a buffer - a chimera
+        // bus - and resolves each address through the page tables of the
+        // process it started, whichever thread happens to have run last.
+        // Addresses nothing is mapped at read as zero and swallow writes.
+        std::uint8_t peek_user(std::uint32_t addr);
+        void poke_user(std::uint32_t addr, std::uint8_t value);
+
         // Installs a Symbian package into the machine, on drive C. The path
         // is a file the host mounted; what it writes goes into the machine's
         // own filesystem. Returns the emulator's own result code, 0 for
@@ -185,6 +196,15 @@ namespace chimera {
 
         // The applications the machine had before the project's own arrived.
         std::vector<std::uint32_t> apps_before_install_;
+
+        // Whose address space the game's memory lives in, and the last page
+        // looked up in it: a search walks addresses in order, so one cached
+        // translation carries almost all of them.
+        std::uint8_t *resolve_user(std::uint32_t addr);
+
+        std::int32_t game_asid_ = -1;
+        std::uint32_t cached_page_ = 0xFFFFFFFF;
+        std::uint8_t *cached_host_ = nullptr;
         std::unique_ptr<eka2l1::system> sys_;
         std::shared_ptr<eka2l1::drivers::graphics_driver> gdriver_;
         std::shared_ptr<audio_sink> adriver_;

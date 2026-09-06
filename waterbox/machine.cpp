@@ -14,6 +14,7 @@
 #include <drivers/input/common.h>
 #include <drivers/itc.h>
 #include <kernel/kernel.h>
+#include <mem/process.h>
 #include <kernel/timing.h>
 #include <services/window/scheduler.h>
 #include <services/window/screen.h>
@@ -420,12 +421,72 @@ namespace chimera {
             return true;
         }
 
-        if (!applist->launch_app(*registry, cmdline, nullptr, nullptr)) {
+        eka2l1::kernel::uid thread_id = 0;
+
+        if (!applist->launch_app(*registry, cmdline, &thread_id, nullptr)) {
             return false;
         }
 
         launched_uid_ = uid;
+
+        // Whose memory the bus reads. Taken here rather than looked up on every
+        // access: by the time anybody asks, the thread that happens to be
+        // current is as likely to be the window server's as the game's.
+        eka2l1::kernel_system *kern = sys_->get_kernel_system();
+        eka2l1::kernel::thread *starter = kern ? kern->get_by_id<eka2l1::kernel::thread>(thread_id) : nullptr;
+        eka2l1::kernel::process *owner = starter ? starter->owning_process() : nullptr;
+
+        if (owner && owner->get_mem_model()) {
+            game_asid_ = static_cast<std::int32_t>(owner->get_mem_model()->address_space_id());
+        }
+
         return true;
+    }
+
+    // One page's worth of translation, kept: a search walks addresses in order,
+    // so all but one byte in four thousand is answered without touching the
+    // page tables.
+    std::uint8_t *machine::resolve_user(const std::uint32_t addr) {
+        constexpr std::uint32_t PAGE_MASK = 0xFFFFF000u;
+
+        const std::uint32_t page = addr & PAGE_MASK;
+
+        if ((page == cached_page_) && cached_host_) {
+            return cached_host_ + (addr & ~PAGE_MASK);
+        }
+
+        eka2l1::memory_system *mem = sys_->get_memory_system();
+
+        // The lowest page is Symbian's null trap and is never real memory.
+        if (!mem || !page) {
+            return nullptr;
+        }
+
+        // The page's own base, so the whole page is served from one lookup. A
+        // page nothing is mapped at has no host address at all.
+        std::uint8_t *host = reinterpret_cast<std::uint8_t *>(mem->get_real_pointer(page, game_asid_));
+
+        if (!host) {
+            cached_page_ = 0xFFFFFFFF;
+            cached_host_ = nullptr;
+            return nullptr;
+        }
+
+        cached_page_ = page;
+        cached_host_ = host;
+
+        return host + (addr & ~PAGE_MASK);
+    }
+
+    std::uint8_t machine::peek_user(const std::uint32_t addr) {
+        const std::uint8_t *at = resolve_user(addr);
+        return at ? *at : 0;
+    }
+
+    void machine::poke_user(const std::uint32_t addr, const std::uint8_t value) {
+        if (std::uint8_t *at = resolve_user(addr)) {
+            *at = value;
+        }
     }
 
     void machine::remember_apps() {

@@ -19,6 +19,7 @@ extern "C" void *chimera_egl_proc(const char *name);
 
 #include <common/cvt.h>
 #include <kernel/kernel.h>
+#include <kernel/chunk.h>
 #include <kernel/thread.h>
 #include <kernel/timing.h>
 #include <services/applist/applist.h>
@@ -78,6 +79,12 @@ namespace {
     }
 }
 
+// The bus this harness reads, and the window of it worth comparing. See the
+// block that digests them.
+static constexpr std::uint32_t BUS_SIZE = 0x04000000;
+static constexpr std::uint32_t BUS_BODY_FIRST = 0x00701000;
+static constexpr std::uint32_t BUS_BODY_LAST = 0x02A00000;
+
 int main(int argc, char **argv) {
     chimera::machine_options options;
     options.storage = "data";
@@ -98,6 +105,7 @@ int main(int argc, char **argv) {
     bool verbose = false;
     bool gpu = false;
     std::string screen_out;
+    std::string bus_out;
 
     for (int i = 1; i < argc; i++) {
         const bool has_value = (i + 1 < argc);
@@ -130,6 +138,8 @@ int main(int argc, char **argv) {
             options.cpu_backend = argv[++i];
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
             gpu = true;
+        } else if ((std::strcmp(argv[i], "--bus-out") == 0) && has_value) {
+            bus_out = argv[++i];
         } else if ((std::strcmp(argv[i], "--screen-out") == 0) && has_value) {
             screen_out = argv[++i];
         } else if (std::strcmp(argv[i], "--verbose") == 0) {
@@ -537,6 +547,56 @@ int main(int argc, char **argv) {
         }
     }
 
+    {
+        // What the machine's own address space holds, byte by byte through the
+        // page tables of the application this machine started - the machine's own address space, the way a watch tool reads it.
+
+        // Two numbers, and only one of them is worth comparing between
+        // flavors. The emulator keeps a little of its own bookkeeping inside
+        // guest chunks - host pointers, eight bytes wide, at the base of the
+        // chunks it allocates through - so the raw space differs between a
+        // native process and a sandbox by a hundred-odd bytes that belong to
+        // neither machine. The BODY of the game's heap has none of that in it,
+        // and holds nine tenths of everything the machine has written.
+        std::uint64_t digest = 1469598103934665603ull;
+        std::size_t mapped = 0;
+        std::size_t body = 0;
+
+        for (std::uint32_t addr = 0; addr < BUS_SIZE; addr++) {
+            const std::uint8_t byte = machine.peek_user(addr);
+
+            if (byte != 0) {
+                mapped++;
+            }
+
+            if ((addr >= BUS_BODY_FIRST) && (addr < BUS_BODY_LAST)) {
+                digest ^= byte;
+                digest *= 1099511628211ull;
+
+                if (byte != 0) {
+                    body++;
+                }
+            }
+        }
+
+        std::printf("bus: 64 MiB nonzero %zu\n", mapped);
+        std::printf("bus body: digest %016llx nonzero %zu\n",
+            static_cast<unsigned long long>(digest), body);
+
+        if (!bus_out.empty()) {
+            std::FILE *f = std::fopen(bus_out.c_str(), "wb");
+
+            if (f) {
+                for (std::uint32_t addr = 0; addr < BUS_SIZE; addr++) {
+                    const std::uint8_t byte = machine.peek_user(addr);
+                    std::fwrite(&byte, 1, 1, f);
+                }
+
+                std::fclose(f);
+            }
+        }
+    }
+
     if (verbose) {
         // Every window the compositor has, and whether it can be seen: a
         // window with an empty visible region draws nothing and gives a game
@@ -570,6 +630,25 @@ int main(int argc, char **argv) {
             } walker;
 
             winserv->get_screen(0)->root->walk_tree_back_to_front(&walker);
+
+            // Every chunk the game's process owns: the only shape guest RAM
+            // has, and what a memory domain can be made of.
+            eka2l1::kernel_system *kchunks = machine.sys()->get_kernel_system();
+
+            kchunks->for_each_chunk([&](eka2l1::kernel::chunk *c) {
+                if (!c || !c->valid() || !c->host_base()) {
+                    return;
+                }
+
+                eka2l1::kernel::process *own = c->get_own_process();
+
+                std::printf("chunk: %-28s owner %-12s base 0x%08x max %8zu committed %8zu%s\n",
+                    c->name().c_str(),
+                    own ? own->name().c_str() : "-",
+                    c->base(own).ptr_address(),
+                    c->max_size(), c->committed(),
+                    c->is_chunk_heap() ? " heap" : "");
+            });
 
             // And the window groups: which applications the machine has on
             // screen, and which one the keys go to.

@@ -30,6 +30,11 @@ typedef struct {
 } freader;
 
 /* The savestate, in memory: written into on save, read back on load. */
+/* The bus this driver reads, and the window of it worth comparing. */
+#define BUS_SIZE       0x04000000
+#define BUS_BODY_FIRST 0x00701000
+#define BUS_BODY_LAST  0x02A00000
+
 struct statebuf { uint8_t *p; size_t len, cap, pos; };
 static struct statebuf g_state;
 
@@ -90,6 +95,7 @@ int main(int argc, char **argv)
 	int rerecord = 0;
 	const char *state_out = NULL, *state_in = NULL;
 	long press = -1;
+	const char *bus_out = NULL;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
@@ -101,6 +107,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--state-out") && i + 1 < argc) state_out = argv[++i];
 		else if (!strcmp(argv[i], "--state-in") && i + 1 < argc) state_in = argv[++i];
 		else if (!strcmp(argv[i], "--press") && i + 1 < argc) press = strtol(argv[++i], NULL, 10);
+		else if (!strcmp(argv[i], "--bus-out") && i + 1 < argc) bus_out = argv[++i];
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
 	}
@@ -217,6 +224,45 @@ int main(int argc, char **argv)
 		}
 
 		FrameAdvance(0);
+	}
+
+	{
+		/* The address space, digested exactly as the native reference digests
+		 * it: the whole space counted, and the body of the game's heap - the
+		 * part with none of the emulator's own bookkeeping in it - digested. */
+		typedef int32_t (MB_GUEST_ABI *peekfn)(int32_t, int32_t);
+		peekfn PeekBus = (peekfn)proc(h, "PeekBus");
+		uint64_t digest = 1469598103934665603ull;
+		size_t mapped = 0, body = 0;
+
+		for (int32_t addr = 0; addr < BUS_SIZE; addr++) {
+			uint8_t byte = (uint8_t)PeekBus(0, addr);
+
+			if (byte) mapped++;
+
+			if (addr >= BUS_BODY_FIRST && addr < BUS_BODY_LAST) {
+				digest ^= byte;
+				digest *= 1099511628211ull;
+
+				if (byte) body++;
+			}
+		}
+
+		printf("bus: 64 MiB nonzero %zu\n", mapped);
+		printf("bus body: digest %016llx nonzero %zu\n", (unsigned long long)digest, body);
+
+		if (bus_out) {
+			FILE *bf = fopen(bus_out, "wb");
+
+			if (bf) {
+				for (int32_t addr = 0; addr < BUS_SIZE; addr++) {
+					uint8_t byte = (uint8_t)PeekBus(0, addr);
+					fwrite(&byte, 1, 1, bf);
+				}
+
+				fclose(bf);
+			}
+		}
 	}
 
 	if (rerecord) printf("state bytes: %zu\n", g_state.len);
