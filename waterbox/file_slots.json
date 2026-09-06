@@ -1,30 +1,20 @@
 {
-  "_comment": "The core-declared file form for chimera's project wizard. A Symbian project is a DEVICE - one ROM image, which says which phone it is and carries the phone's own filesystem - and, if the project wants one, a package installed onto it before it runs.",
+  "_comment": "The core-declared file form for chimera's project wizard. A Symbian project is a GAME: the machine it runs on is firmware (the phone's ROM), because one ROM serves every game and a project should name the game it is about.",
   "slots": [
     {
-      "id": "rom",
-      "title": "Device ROM",
+      "id": "game",
+      "title": "Game",
       "min": 1,
       "max": 1,
       "formats": [
-        "rom",
-        "img"
-      ],
-      "help": "A Symbian phone's ROM image (the file EKA2L1 calls SYM.ROM). It says which device it is - manufacturer, model, firmware code and Symbian version - and it carries drive Z, so nothing else is needed."
-    },
-    {
-      "id": "game",
-      "title": "Game or package",
-      "min": 0,
-      "max": 1,
-      "formats": [
+        "blz",
         "rar",
         "zip",
         "7z",
         "sis",
         "sisx"
       ],
-      "help": "An N-Gage game card - an archive holding the card's System\\\\Apps tree - copied onto drive E before the machine starts, or a Symbian installation package (.sis, .sisx) installed onto drive C. Either way what it writes lives in the machine's memory, so it is part of every savestate and every movie made from this project."
+      "help": "An N-Gage game. A card image (.blz) is unpacked into the machine by the BLZ installer, which the wizard then asks for as firmware. A card dump (.rar, .zip, .7z holding the card's System\\\\Apps tree) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto its C drive. Either way what it writes lives in the machine's own memory, so it is part of every savestate and every movie made from this project."
     }
   ]
 }

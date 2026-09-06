@@ -76,6 +76,12 @@ namespace chimera {
         // device, which is a separate question.
         void startup();
 
+        // Gives the machine a driver that draws nowhere. A machine with no
+        // driver at all does not merely draw nothing: a user-interface
+        // application asking to be composed goes through a null pointer and
+        // takes the machine with it. See null-graphics.h.
+        void start_null_graphics();
+
         // Copies an N-Gage game card into the machine, onto drive E, straight
         // out of the archive it arrived in. The emulator's own card installer
         // unpacks to a directory on the host first and then copies with host
@@ -119,6 +125,28 @@ namespace chimera {
         // Addresses nothing is mapped at read as zero and swallow writes.
         std::uint8_t peek_user(std::uint32_t addr);
         void poke_user(std::uint32_t addr, std::uint8_t value);
+
+        // Puts one host file into the machine's own filesystem, at the path
+        // given. The machine's drives have no host directory behind them, so
+        // anything the machine is to find has to be written in through its own
+        // filesystem like this. False when the file cannot be read or the
+        // machine will not take it.
+        bool put_file(const std::string &machine_path, const std::string &host_path);
+
+        // Unpacks an N-Gage .blz card image into the machine, using the
+        // Symbian application that knows how.
+        //
+        // A .blz is a compressed container with no public format; the machine
+        // cannot read one and neither can this core. What CAN read one is
+        // BLZinstapp, a Symbian application - so the machine installs it, puts
+        // the .blz on its memory card where the application looks for it, runs
+        // it, and works its two-key menu. Everything it unpacks lands in the
+        // machine's own memory like any other install.
+        //
+        // Costs the machine the time the unpack takes, before the first frame
+        // the caller ever asks for. Answers false when the application never
+        // came up, never finished, or unpacked nothing.
+        bool install_blz(const std::string &blz_path, const std::string &installer_path);
 
         // Installs a Symbian package into the machine, on drive C. The path
         // is a file the host mounted; what it writes goes into the machine's

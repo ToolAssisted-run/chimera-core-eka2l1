@@ -5,6 +5,7 @@
 // machine's own memory (memfs.cpp). Without it the machine is still built and
 // still keeps time, which is what the equivalence gate compares when no ROM is
 // present.
+#include <cstring>
 #include "input.h"
 #include "machine.h"
 #include "memfs.h"
@@ -69,15 +70,40 @@ namespace {
     bool g_device = false;
     std::uint32_t g_launched = 0;
 
-    // The ROM, under the name a chimera host mounts a core's firmware by. It
-    // says which device it is and it carries drive Z.
-    constexpr const char *ROM_NAME = "rom";
+    // The machine, as firmware: a dump of a phone's own ROM, which says which
+    // device this is and carries drive Z whole. One ROM serves every game, so
+    // it is not the project's file.
+    constexpr const char *ROM_NAME = "sym.rom";
 
-    // A Symbian package to install into the machine before it runs, if the
-    // project has one.
+    // The project's file: the game.
     constexpr const char *GAME_SLOT = "game";
 
+    // And, for a game that arrives as a .blz, the Symbian application that can
+    // unpack one. Firmware too, and asked for only when the project's file is
+    // a .blz.
+    constexpr const char *BLZ_INSTALLER = "blzinstapp.sis";
+
     int g_installed = -1;
+
+    bool ends_with(const char *name, const char *suffix) {
+        const std::size_t n = std::strlen(name);
+        const std::size_t m = std::strlen(suffix);
+
+        if (n < m) {
+            return false;
+        }
+
+        for (std::size_t i = 0; i < m; i++) {
+            const char a = name[n - m + i];
+            const char b = suffix[i];
+
+            if (((a >= 'A') && (a <= 'Z') ? (a + 32) : a) != b) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 extern "C" {
@@ -97,6 +123,13 @@ ECL_EXPORT int Init(void) {
 
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();
+
+    // There is no OpenGL in a sandbox, and a machine with no graphics driver
+    // at all dies the moment an application asks the window server to compose
+    // anything. This one accepts every drawing command and keeps none: what a
+    // game draws through direct screen access is read out of the panel it
+    // painted, which needs no driver at all.
+    g_machine->start_null_graphics();
     g_machine->start_audio();
 
     // The drives, before the device: setting the device loads the ROM and asks
@@ -145,16 +178,33 @@ ECL_EXPORT int Init(void) {
             // application from the phone's afterwards.
             g_machine->remember_apps();
 
-            // A game card first - an archive holding a System\Apps tree - and
-            // a Symbian package if it is not one.
-            const int card_files = g_machine->install_card(game);
+            // A card image the machine cannot read for itself, unpacked by the
+            // Symbian application that can; a game card - an archive holding a
+            // System\Apps tree; or a Symbian package. In that order, because
+            // only the first is told apart by its name.
+            if (ends_with(game, ".blz")) {
+                if (!g_machine->install_blz(game, BLZ_INSTALLER)) {
+                    std::snprintf(g_loadError, sizeof g_loadError,
+                        "the machine could not unpack this .blz - the BLZ installer firmware "
+                        "did not run, or unpacked nothing");
+                    return 0;
+                }
 
-            if (card_files > 0) {
                 g_installed = 0;
-
-                g_machine->sys()->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
             } else {
-                g_installed = g_machine->install_package(game);
+                const int card_files = g_machine->install_card(game);
+
+                if (card_files > 0) {
+                    g_installed = 0;
+
+                    g_machine->sys()->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
+                } else {
+                    g_installed = g_machine->install_package(game);
+
+                    // An installer writes to drive C, and the application list
+                    // only learns of it if the drive is announced again.
+                    g_machine->sys()->get_io_system()->announce_drive(drive_c, eka2l1::drive_action_mount);
+                }
             }
 
             // And it starts. A phone with nothing running shows its menu, and

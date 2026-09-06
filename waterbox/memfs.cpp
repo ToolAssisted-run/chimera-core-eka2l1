@@ -144,6 +144,7 @@ namespace chimera {
 
             const std::size_t total = static_cast<std::size_t>(size) * count;
 
+
             if (node_->bytes.size() < position_ + total) {
                 node_->bytes.resize(position_ + total);
             }
@@ -168,8 +169,10 @@ namespace chimera {
                 return 0;
             }
 
+
             std::memcpy(data, node_->bytes.data() + position_, static_cast<std::size_t>(want));
             position_ += want;
+
 
             return static_cast<std::size_t>(want);
         }
@@ -187,6 +190,7 @@ namespace chimera {
         }
 
         std::uint64_t seek(std::int64_t offset, eka2l1::file_seek_mode where) override {
+
             switch (where) {
             case eka2l1::file_seek_mode::beg:
                 position_ = static_cast<std::uint64_t>(offset);
@@ -202,15 +206,21 @@ namespace chimera {
 
             default:
                 // "address" asks where the file lives in the machine's memory,
-                // and answers 0xFFFFFFFF when it does not live there. Nothing
-                // here does: the pack is a copy of a ROM's files, not the ROM.
-                // Answering the file's size instead - which is what a seek to
-                // the end would say - sends the caller looking for an icon at
-                // an address that is not one, and every registration it reads
-                // fails.
+                // so that a caller can read it in place. Nothing here does: the
+                // drives are the machine's own memory, not the ROM.
+                //
+                // The answer to that is REFUSAL, and it has to be the sixty-four
+                // bit all-ones the file server checks for. Anything else is an
+                // address as far as the file server is concerned, and it hands
+                // it to the guest to read: answering the file's size sent one
+                // caller looking for an icon at an address that was not one, and
+                // answering 0xFFFFFFFF killed an application that asked whether
+                // its own resource file could be read in place - it read from
+                // 0xFFFFFFFF and took a KERN-EXEC 3 for it.
                 position_ = static_cast<std::uint64_t>(offset);
-                return 0xFFFFFFFF;
+                return 0xFFFFFFFFFFFFFFFF;
             }
+
 
             return position_;
         }
@@ -485,6 +495,28 @@ namespace chimera {
         return total;
     }
 
+    static void walk_files(const memory_node &node, const std::string &prefix,
+        const std::function<void(const std::string &, const std::vector<std::uint8_t> &)> &visitor) {
+        for (const auto &child : node.children) {
+            const std::string path = prefix + child.second.name;
+
+            if (child.second.is_dir) {
+                walk_files(child.second, path + "\\", visitor);
+            } else {
+                visitor(path, child.second.bytes);
+            }
+        }
+    }
+
+    void memory_file_system::each_file(
+        const std::function<void(const std::string &, const std::vector<std::uint8_t> &)> &visitor) const {
+        for (std::size_t i = 0; i < roots_.size(); i++) {
+            if (mappings_[i].second) {
+                walk_files(roots_[i], std::string(1, static_cast<char>('A' + i)) + ":\\", visitor);
+            }
+        }
+    }
+
     std::size_t memory_file_system::written_bytes() const {
         std::size_t total = 0;
 
@@ -580,6 +612,7 @@ namespace chimera {
             return nullptr;
         }
 
+
         memory_node *node = resolve(utf8);
 
         if (!node && (mode & WRITE_MODE)) {
@@ -600,7 +633,14 @@ namespace chimera {
             return nullptr;
         }
 
-        if ((mode & WRITE_MODE) && !(mode & APPEND_MODE)) {
+        // Truncate only when the caller asked to WRITE and nothing else. That
+        // is the host filesystem's contract, and the file server leans on it:
+        // RFile::Replace opens write-only ("wb+", start empty), RFile::Open
+        // with EFileWrite opens read AND write ("rb+", keep what is there).
+        // Emptying the file for the second one destroys what the caller was
+        // about to read - an installer streaming a package into place reads
+        // its own source through such a handle, and got nothing.
+        if ((mode & WRITE_MODE) && !(mode & READ_MODE) && !(mode & APPEND_MODE)) {
             node->bytes.clear();
         }
 

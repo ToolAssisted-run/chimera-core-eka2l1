@@ -30,7 +30,7 @@ EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/
 
 CXXFLAGS := $(WBFLAGS) $(MBINCS) $(EKAINCS) -I. $(CXXINCS)
 
-OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/host-ui.o $(O)/guest-syscalls.o $(O)/generated-embedded-files.o
+OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/null-graphics.o $(O)/host-ui.o $(O)/guest-syscalls.o $(O)/generated-embedded-files.o
 
 all: $(OBJS)
 

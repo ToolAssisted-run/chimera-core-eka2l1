@@ -292,6 +292,41 @@ else
 				pass=$((pass + 1))
 			fi
 
+			# ---- a card image the machine unpacks for itself ------------
+			# A .blz is a container this core cannot read and neither can the
+			# machine: what reads one is a Symbian application, so the core
+			# installs it, puts the .blz where it looks, runs it and works its
+			# menu - all before the first frame anybody asked for. Both flavors
+			# must do that identically, and end with the game running.
+			blz="$(ls "$root"/tests/roms-local/*.blz 2>/dev/null | head -1)"
+			blzapp="$root/tests/roms-local/BLZinstapp.sis"
+
+			if [ -z "$blz" ] || [ ! -f "$blzapp" ]; then
+				echo "SKIP blz: no .blz and BLZinstapp.sis in tests/roms-local (both are the user's to supply)"
+			else
+				digest8='^(launched|instructions|screen):'
+
+				rm -rf "$work/blz"
+				mkdir -p "$work/blz"
+
+				natz="$(timeout 1800 "$rn" --data "$work/blz" --rom-only "$rom" --frames 3000 --blz "$blz" --blz-installer "$blzapp" 2>/dev/null | grep -E "$digest8" | sort)"
+				boxz="$(timeout 1800 "$rw" "$core" --frames 3000 --rom "$rom" --game "$blz" --blz-installer "$blzapp" 2>&1 | grep -E "$digest8" | sort)"
+
+				if ! echo "$boxz" | grep -q "^launched: "; then
+					echo "FAIL blz (the sandbox unpacked nothing)"; echo "$boxz"; fail=$((fail + 1))
+				elif echo "$boxz" | grep -q "^screen: .* lit 0$"; then
+					echo "FAIL blz (the game drew nothing)"; echo "$boxz"; fail=$((fail + 1))
+				elif [ "$natz" != "$boxz" ]; then
+					echo "FAIL blz (native vs sandbox)"
+					echo "$natz" > "$work/natz.txt"
+					echo "$boxz" > "$work/boxz.txt"
+					diff "$work/natz.txt" "$work/boxz.txt" | head -20; fail=$((fail + 1))
+				else
+					echo "PASS blz: the machine unpacked it and ran it, native == sandbox ($(echo "$boxz" | tr '\n' ' '))"
+					pass=$((pass + 1))
+				fi
+			fi
+
 			# ---- a game card, and the game running ----------------------
 			# The user's own, never committed. The card is copied out of its
 			# archive straight onto the machine's drive E, the application

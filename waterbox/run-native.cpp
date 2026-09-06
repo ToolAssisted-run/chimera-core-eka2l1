@@ -106,6 +106,15 @@ int main(int argc, char **argv) {
     bool gpu = false;
     std::string screen_out;
     std::string bus_out;
+    std::string extract_to;
+    std::string put_spec;
+    std::string verify_spec;
+    std::string blz_path;
+    std::string blz_installer;
+    int press_at = -1;
+
+    // Scripted keys: <frame>:<button> pairs, held for twenty frames each.
+    std::vector<std::pair<int, int>> script;
 
     for (int i = 1; i < argc; i++) {
         const bool has_value = (i + 1 < argc);
@@ -128,6 +137,10 @@ int main(int argc, char **argv) {
             press_button = std::atoi(argv[++i]);
         } else if ((std::strcmp(argv[i], "--press-raw") == 0) && has_value) {
             press_raw = static_cast<int>(std::strtol(argv[++i], nullptr, 0));
+        } else if ((std::strcmp(argv[i], "--blz") == 0) && has_value) {
+            blz_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--blz-installer") == 0) && has_value) {
+            blz_installer = argv[++i];
         } else if ((std::strcmp(argv[i], "--card") == 0) && has_value) {
             card_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--install") == 0) && has_value) {
@@ -138,6 +151,23 @@ int main(int argc, char **argv) {
             options.cpu_backend = argv[++i];
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
             gpu = true;
+        } else if ((std::strcmp(argv[i], "--verify") == 0) && has_value) {
+            verify_spec = argv[++i];
+        } else if ((std::strcmp(argv[i], "--put") == 0) && has_value) {
+            put_spec = argv[++i];
+        } else if ((std::strcmp(argv[i], "--press-at") == 0) && has_value) {
+            const std::string spec = argv[++i];
+            const std::size_t colon = spec.find(':');
+
+            if (colon == std::string::npos) {
+                press_at = std::atoi(spec.c_str());
+            } else {
+                script.emplace_back(std::atoi(spec.substr(0, colon).c_str()),
+                    std::atoi(spec.substr(colon + 1).c_str()));
+            }
+        } else if ((std::strcmp(argv[i], "--extract-to") == 0) && has_value) {
+            extract_to = argv[++i];
+            verbose = true;
         } else if ((std::strcmp(argv[i], "--bus-out") == 0) && has_value) {
             bus_out = argv[++i];
         } else if ((std::strcmp(argv[i], "--screen-out") == 0) && has_value) {
@@ -210,6 +240,11 @@ int main(int argc, char **argv) {
 
         machine.start_graphics(chimera_egl_proc);
         std::printf("gpu: %s\n", machine.has_graphics() ? "on" : "refused");
+    } else {
+        // The same machine the core is: a driver that accepts everything and
+        // draws nowhere. Without one, an application that asks the window
+        // server to compose takes the machine down with it.
+        machine.start_null_graphics();
     }
 
     if (drives) {
@@ -273,7 +308,7 @@ int main(int argc, char **argv) {
 
     // What the machine already had, so it can tell the project's own
     // application from the phone's afterwards.
-    if (!install_path.empty() || !card_path.empty()) {
+    if (!install_path.empty() || !card_path.empty() || !blz_path.empty()) {
         machine.remember_apps();
     }
 
@@ -284,6 +319,16 @@ int main(int argc, char **argv) {
             eka2l1::common::utf8_to_ucs2(install_path), drive_c);
 
         std::printf("install: %d\n", result);
+
+        // The application list only learns about what an installer wrote if it
+        // is told the drive changed under it.
+        machine.sys()->get_io_system()->announce_drive(drive_c, eka2l1::drive_action_mount);
+    }
+
+    if (!blz_path.empty()) {
+        // The same path the core takes: the installer application, driven, and
+        // whatever it unpacks.
+        std::printf("blz: %s\n", machine.install_blz(blz_path, blz_installer) ? "unpacked" : "refused");
     }
 
     if (!card_path.empty()) {
@@ -368,9 +413,87 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (!put_spec.empty()) {
+        // <machine path>=<host file>, written in through the machine's own
+        // filesystem.
+        const std::size_t eq = put_spec.find('=');
+
+        if (eq != std::string::npos) {
+            std::printf("put %s: %s\n", put_spec.substr(0, eq).c_str(),
+                machine.put_file(put_spec.substr(0, eq), put_spec.substr(eq + 1)) ? "ok" : "refused");
+        }
+    }
+
+    if (!verify_spec.empty()) {
+        // Reads a file back OUT of the machine, the way a guest would - odd
+        // sized reads, seeks between them - and compares it with the host file
+        // it came from. A filesystem that serves the wrong bytes for an
+        // unusual access pattern looks exactly like a corrupt download.
+        const std::size_t eq = verify_spec.find('=');
+
+        if (eq != std::string::npos) {
+            const std::string machine_path = verify_spec.substr(0, eq);
+            const std::string host_path = verify_spec.substr(eq + 1);
+
+            std::vector<std::uint8_t> want;
+
+            if (std::FILE *f = std::fopen(host_path.c_str(), "rb")) {
+                std::uint8_t buf[65536];
+                std::size_t got = 0;
+
+                while ((got = std::fread(buf, 1, sizeof(buf), f)) > 0) {
+                    want.insert(want.end(), buf, buf + got);
+                }
+
+                std::fclose(f);
+            }
+
+            eka2l1::symfile handle = machine.sys()->get_io_system()->open_file(
+                eka2l1::common::utf8_to_ucs2(machine_path), READ_MODE | BIN_MODE);
+
+            if (!handle) {
+                std::printf("verify %s: cannot open\n", machine_path.c_str());
+            } else {
+                std::vector<std::uint8_t> got_bytes(want.size(), 0);
+                std::size_t at = 0;
+                std::size_t mismatch = SIZE_MAX;
+
+                while (at < want.size()) {
+                    const std::size_t chunk = std::min<std::size_t>(4093, want.size() - at);
+
+                    handle->seek(static_cast<std::int64_t>(at), eka2l1::file_seek_mode::beg);
+
+                    const std::size_t read = handle->read_file(got_bytes.data() + at,
+                        static_cast<std::uint32_t>(chunk), 1);
+
+                    if (read != chunk) {
+                        std::printf("verify %s: short read at %zu (%zu of %zu)\n",
+                            machine_path.c_str(), at, read, chunk);
+                        break;
+                    }
+
+                    at += chunk;
+                }
+
+                for (std::size_t i = 0; i < want.size(); i++) {
+                    if (got_bytes[i] != want[i]) {
+                        mismatch = i;
+                        break;
+                    }
+                }
+
+                std::printf("verify %s: size %llu (host %zu) first difference %s\n", machine_path.c_str(),
+                    static_cast<unsigned long long>(handle->size()), want.size(),
+                    (mismatch == SIZE_MAX) ? "none" : std::to_string(mismatch).c_str());
+
+                handle->close();
+            }
+        }
+    }
+
     // The project's own application starts by itself, exactly as it does in
     // the core: a machine that was given a game runs the game.
-    if (!card_path.empty() || !install_path.empty()) {
+    if (!card_path.empty() || !install_path.empty() || !blz_path.empty()) {
         const std::uint32_t launched = machine.launch_installed_app();
 
         if (launched != 0) {
@@ -460,10 +583,20 @@ int main(int argc, char **argv) {
         // alone for twenty emulated seconds has usually gone back to whatever
         // it does when nobody is there. Two hundred frames is long enough to
         // see the answer and short enough that it is still on screen.
+        for (const auto &step : script) {
+            if (i == step.first) {
+                machine.set_button(step.second, true);
+            } else if (i == step.first + 20) {
+                machine.set_button(step.second, false);
+            }
+        }
+
         if (press_button >= 0) {
-            if (i == frames - 200) {
+            const int at = (press_at >= 0) ? press_at : (frames - 200);
+
+            if (i == at) {
                 machine.set_button(press_button, true);
-            } else if (i == frames - 180) {
+            } else if (i == ((press_at >= 0) ? press_at + 20 : frames - 180)) {
                 machine.set_button(press_button, false);
             }
         }
@@ -595,6 +728,30 @@ int main(int argc, char **argv) {
                 std::fclose(f);
             }
         }
+    }
+
+    if (verbose && drives) {
+        // Every file the machine holds. An installer's work is invisible
+        // otherwise: there is no host directory to look in.
+        drives->each_file([&](const std::string &path, const std::vector<std::uint8_t> &bytes) {
+            std::printf("file: %-52s %8zu\n", path.c_str(), bytes.size());
+
+            // And out to the host, if the caller wants to look inside one.
+            if (!extract_to.empty()) {
+                std::string flat = path;
+
+                for (char &c : flat) {
+                    if ((c == '\\') || (c == ':')) {
+                        c = '_';
+                    }
+                }
+
+                if (std::FILE *out = std::fopen((extract_to + "/" + flat).c_str(), "wb")) {
+                    std::fwrite(bytes.data(), 1, bytes.size(), out);
+                    std::fclose(out);
+                }
+            }
+        });
     }
 
     if (verbose) {

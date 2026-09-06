@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "gl-context.h"
 #include "input.h"
+#include "null-graphics.h"
 #include "host-ui.h"
 #include "embedded-files.h"
 
@@ -175,6 +176,16 @@ namespace chimera {
         // "now" began and reads the same instant forever, so no event it holds
         // ever comes due. set_device() calls it again, which costs nothing.
         sys_->get_ntimer()->reset();
+    }
+
+    void machine::start_null_graphics() {
+        if (gdriver_) {
+            return;
+        }
+
+        gdriver_ = make_null_graphics_driver();
+        gdriver_->set_display_hook([]() {});
+        sys_->set_graphics_driver(gdriver_.get());
     }
 
     void machine::start_graphics(void *(*loader)(const char *name)) {
@@ -537,6 +548,126 @@ namespace chimera {
         }
 
         return chosen;
+    }
+
+    // Whether the machine still has a thread called blzinstapp. Its own
+    // "Exiting..." is the only thing that says the unpack is over.
+    static bool installer_alive(eka2l1::kernel_system *kern) {
+        bool alive = false;
+
+        for (auto &object : kern->get_thread_list()) {
+            eka2l1::kernel::thread *thread = reinterpret_cast<eka2l1::kernel::thread *>(object.get());
+
+            if (thread && (thread->name().find("blzinstapp") != std::string::npos)
+                && (thread->current_state() != eka2l1::kernel::thread_state::stop)) {
+                alive = true;
+            }
+        }
+
+        return alive;
+    }
+
+    bool machine::install_blz(const std::string &blz_path, const std::string &installer_path) {
+        // Where the application looks: the root of the memory card, and only
+        // for *.blz. The name it shows is the file's, so keep the caller's.
+        std::string leaf = blz_path;
+        const std::size_t slash = leaf.find_last_of("/\\");
+
+        if (slash != std::string::npos) {
+            leaf = leaf.substr(slash + 1);
+        }
+
+        if (!put_file("E:\\" + leaf, blz_path)) {
+            return false;
+        }
+
+        // What the machine has before any of this, so the installer and then
+        // the game can each be told apart from the phone's own applications.
+        remember_apps();
+
+        // The application itself, onto drive C, and the application list has to
+        // be told the drive changed or it will never see it.
+        if (install_package(installer_path) != 0) {
+            return false;
+        }
+
+        sys_->get_io_system()->announce_drive(drive_c, eka2l1::drive_action_mount);
+
+        const std::uint32_t installer_uid = launch_installed_app();
+
+        if (installer_uid == 0) {
+            return false;
+        }
+
+        // Its menu, in the two keys it takes: the left soft key opens Options,
+        // and the left soft key again chooses Install, which is the first item.
+        // The frames are the application's own pace - it lists the card before
+        // it will answer anything - and the machine runs at its own speed here,
+        // so they are the same frames every time.
+        constexpr std::uint64_t FRAME_US = 1000000ull / 60ull;
+        constexpr int OPTIONS_FRAME = 400;
+        constexpr int INSTALL_FRAME = 500;
+        constexpr int GIVE_UP_FRAME = 20000;
+
+        eka2l1::kernel_system *kern = sys_->get_kernel_system();
+
+        for (int frame = 0; frame < GIVE_UP_FRAME; frame++) {
+            if ((frame == OPTIONS_FRAME) || (frame == INSTALL_FRAME)) {
+                set_button(BUTTON_SOFT_LEFT, true);
+            } else if ((frame == OPTIONS_FRAME + 20) || (frame == INSTALL_FRAME + 20)) {
+                set_button(BUTTON_SOFT_LEFT, false);
+            }
+
+            run_for_us(FRAME_US);
+
+            // The application says goodbye by exiting, and nothing else it
+            // does says it is finished.
+            if ((frame > INSTALL_FRAME + 20) && kern && !installer_alive(kern)) {
+                break;
+            }
+        }
+
+        // Whatever it wrote is on the card, and the application list has not
+        // been told about that either.
+        sys_->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
+
+        // The installer is no longer the project's application: the game it
+        // unpacked is. Forget it, so the game is what gets started.
+        apps_before_install_.push_back(installer_uid);
+        launched_uid_ = 0;
+
+        return true;
+    }
+
+    bool machine::put_file(const std::string &machine_path, const std::string &host_path) {
+        std::FILE *source = std::fopen(host_path.c_str(), "rb");
+
+        if (!source) {
+            return false;
+        }
+
+        std::vector<std::uint8_t> bytes;
+        std::uint8_t buffer[65536];
+        std::size_t got = 0;
+
+        while ((got = std::fread(buffer, 1, sizeof(buffer), source)) > 0) {
+            bytes.insert(bytes.end(), buffer, buffer + got);
+        }
+
+        std::fclose(source);
+
+        eka2l1::symfile target = sys_->get_io_system()->open_file(
+            eka2l1::common::utf8_to_ucs2(machine_path), WRITE_MODE | BIN_MODE);
+
+        if (!target) {
+            return false;
+        }
+
+        const bool written = (target->write_file(bytes.data(), static_cast<std::uint32_t>(bytes.size()), 1)
+            == static_cast<std::size_t>(bytes.size()));
+
+        target->close();
+        return written;
     }
 
     int machine::install_card(const std::string &archive_path) {

@@ -1,0 +1,27 @@
+diff --git a/src/emu/kernel/include/kernel/kernel.h b/src/emu/kernel/include/kernel/kernel.h
+index 9e11109d2..e33ae88fc 100644
+--- a/src/emu/kernel/include/kernel/kernel.h
++++ b/src/emu/kernel/include/kernel/kernel.h
+@@ -503,6 +503,22 @@ namespace eka2l1 {
+         kernel::thread *crr_thread();
+         kernel::process *crr_process();
+ 
++        /**
++         * @brief Visit every chunk the kernel holds.
++         *
++         * A chunk is the only shape guest RAM has: the memory model gives each
++         * one its own host mapping, so there is no flat block of "the
++         * machine's memory" to hand anybody. An embedder that wants to show or
++         * search that memory walks it here.
++         */
++        void for_each_chunk(std::function<void(kernel::chunk *)> visitor) {
++            for (auto &obj : chunks_) {
++                if (obj) {
++                    visitor(reinterpret_cast<kernel::chunk *>(obj.get()));
++                }
++            }
++        }
++
+         process_ptr spawn_new_process(const std::u16string &path,
+             const std::u16string &cmd_arg = u"", const kernel::uid promised_uid3 = 0,
+             const std::uint32_t stack_size = 0);

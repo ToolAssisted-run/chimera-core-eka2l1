@@ -25,7 +25,7 @@ add_custom_command(
 
 # The reference harness: the emulator built, questioned and torn down by an
 # embedder, with no frontend and no host devices.
-add_executable(run-native run-native.cpp host-ui.cpp machine.cpp vclock.cpp memfs.cpp gl-context.cpp gl-egl.c input.cpp audio.cpp ${CHIMERA_EMBEDDED_FILES})
+add_executable(run-native run-native.cpp host-ui.cpp machine.cpp vclock.cpp memfs.cpp gl-context.cpp gl-egl.c input.cpp audio.cpp null-graphics.cpp ${CHIMERA_EMBEDDED_FILES})
 target_include_directories(run-native PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(run-native PRIVATE epoc epockern epocpkg epocservs epocutils drivers config common EGL)
 

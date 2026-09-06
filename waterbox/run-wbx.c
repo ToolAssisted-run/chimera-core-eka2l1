@@ -29,6 +29,24 @@ typedef struct {
 	FILE *f;
 } freader;
 
+/* a mounted file that is only bytes in memory - the slots map */
+typedef struct {
+	const uint8_t *p;
+	size_t len, pos;
+} freader_mem;
+
+static intptr_t mem_read(uintptr_t ud, uint8_t *d, uintptr_t s)
+{
+	freader_mem *m = (freader_mem *)ud;
+	size_t left = m->len - m->pos;
+
+	if (s > left) s = left;
+
+	memcpy(d, m->p + m->pos, s);
+	m->pos += s;
+	return (intptr_t)s;
+}
+
 /* The savestate, in memory: written into on save, read back on load. */
 /* The bus this driver reads, and the window of it worth comparing. */
 #define BUS_SIZE       0x04000000
@@ -89,7 +107,7 @@ static uintptr_t proc(mb_host *h, const char *n)
 
 int main(int argc, char **argv)
 {
-	const char *core = NULL, *rom = NULL, *game = NULL;
+	const char *core = NULL, *rom = NULL, *game = NULL, *installer = NULL;
 	long frames = 60, timer_us = 0;
 	uint32_t run_uid = 0;
 	int rerecord = 0;
@@ -101,6 +119,7 @@ int main(int argc, char **argv)
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
 		else if (!strcmp(argv[i], "--game") && i + 1 < argc) game = argv[++i];
+		else if (!strcmp(argv[i], "--blz-installer") && i + 1 < argc) installer = argv[++i];
 		else if (!strcmp(argv[i], "--timer-us") && i + 1 < argc) timer_us = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (!strcmp(argv[i], "--rerecord")) rerecord = 1;
@@ -133,13 +152,35 @@ int main(int argc, char **argv)
 	/* The device, if there is one: one file, under the name the guest opens
 	 * its firmware by. */
 	if (rom) {
-		wbx_mount_file_path(h, "rom", rom, &r);
+		/* firmware, under the id the core declares for it */
+		wbx_mount_file_path(h, "sym.rom", rom, &r);
 		if (r.error_message[0]) { fprintf(stderr, "mount rom: %s\n", r.error_message); return 1; }
 	}
 
+	if (installer) {
+		/* the other firmware: the application that unpacks a .blz */
+		wbx_mount_file_path(h, "blzinstapp.sis", installer, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount installer: %s\n", r.error_message); return 1; }
+	}
+
+	/* The game, exactly as a chimera project hands it over: mounted under its
+	 * own file name, with a "slots" map that says which slot that name fills.
+	 * The name matters - a .blz is told apart from a card dump by it. */
+	char slots_json[512] = { 0 };
+
 	if (game) {
-		wbx_mount_file_path(h, "game", game, &r);
+		const char *leaf = strrchr(game, '/');
+
+		leaf = leaf ? leaf + 1 : game;
+
+		wbx_mount_file_path(h, leaf, game, &r);
 		if (r.error_message[0]) { fprintf(stderr, "mount game: %s\n", r.error_message); return 1; }
+
+		snprintf(slots_json, sizeof slots_json, "{\"game\":[\"%s\"]}", leaf);
+
+		freader_mem slots_reader = { (const uint8_t *)slots_json, strlen(slots_json), 0 };
+		wbx_mount_file(h, "slots", mem_read, (uintptr_t)&slots_reader, 0, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount slots: %s\n", r.error_message); return 1; }
 	}
 
 	intfn Init = (intfn)proc(h, "Init");

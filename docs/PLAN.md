@@ -568,3 +568,69 @@ The exports ship in `core.wbx` (`GetBusCount`, `GetBusName`, `GetBusSize`,
 same address-resolution the engine uses. What is NOT yet proven is the frontend
 half: `chimera-run --dump` only knows the pointer-backed domains, so a bus
 cannot be dumped headlessly without a change to chimera itself.
+
+## The project is the game, and the phone is firmware (2026-09-06)
+
+Asked for by the user, and right: one ROM serves every game, so a project should
+name the game it is about. The `rom` slot is gone. The project's file is the
+GAME - a card dump, a Symbian package, or a `.blz` - and the machine it runs on
+arrives through the firmware channel:
+
+- **`sym.rom`**, always required. Any Symbian phone's dump; nothing is pinned,
+  because every model's is a different file.
+- **`blzinstapp.sis`**, required only when the project's file is a `.blz`
+  (`requiredWhen: {slot: game, extension: blz}`). Pinned by size and SHA1:
+  there is exactly one such installer.
+
+## A .blz installs itself (2026-09-06)
+
+A `.blz` is an `NGPK` container: compressed, undocumented, and nothing in this
+core or in EKA2L1 can read one. What CAN read one is a Symbian application -
+BLZinstapp - so the machine runs it. `Init` puts the `.blz` on drive E where the
+application looks (`e:\*.blz`), installs the application onto drive C, starts
+it, and works its two-key menu: left soft key for Options, left soft key again
+for Install. It unpacks the game into the machine's own memory, exits, and the
+game that appeared is the one the machine starts. All of that happens before the
+first frame anybody asked for, so a movie begins with the game running.
+
+Red Faction from a card and MotoGP from a `.blz` both run through `chimera-run`
+against the packaged core, with the ROM and the installer supplied as firmware.
+
+**Three real bugs stood in the way, all ours, all found by this one application:**
+
+1. **A seek to "address" has to be REFUSED, not answered.** Symbian asks a file
+   where it lives in memory so it can be read in place; the file server treats
+   sixty-four bits of all-ones as "nowhere" and anything else as an address it
+   hands to the guest. The machine's own filesystem answered `0xFFFFFFFF` -
+   thirty-two bits - so the application read its own resource file from address
+   0xFFFFFFFF and died with KERN-EXEC 3. Every user-interface application on a
+   machine-memory drive would have.
+2. **Opening for writing must not empty the file when reading was asked for
+   too.** The host filesystem opens `"rb+"` for `RFile::Open(EFileWrite)` and
+   `"wb+"` only for `RFile::Replace`; ours truncated for both. The installer
+   streams its source - reads a chunk, writes it out, shortens the source -
+   through exactly such a handle, and got an empty file. It called that a
+   corrupt file, which it was, and we had made it one.
+3. **An installer's work is invisible until the drive is announced.** A package
+   installed onto drive C never reached the application list, so nothing could
+   start what a `.sis` project installed either.
+
+## A driver that draws nowhere (2026-09-06)
+
+The sandbox has no OpenGL, and until now it had no graphics driver at all. That
+was survivable only because a game drawing through direct screen access paints
+the panel itself. Anything that asks the WINDOW SERVER to compose - every
+user-interface application, the BLZ installer among them - goes through the
+driver pointer to make a bitmap or a glyph atlas, and a machine with no driver
+does not draw nothing there: it dies.
+
+So the machine always has one now (`waterbox/null-graphics.h`): a driver that
+accepts every command, executes none, and answers the ones that ask for a handle
+with a number of its own. It also FREES what each command owns - a command
+carrying pixels hands them over, and the real driver deletes them after the
+upload. Ignoring that leaked every frame MotoGP drew, and 256 MiB of guest heap
+lasted about forty seconds.
+
+The native reference uses the same driver whenever it is not asked for a picture,
+so both flavors are the same machine: `1,050,990,966` instructions and screen
+`18db086fd87c329e` on either side.

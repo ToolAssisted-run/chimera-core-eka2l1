@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <map>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -46,6 +47,11 @@ namespace chimera {
         // machine has written into it.
         std::size_t entry_count() const;
         std::size_t written_bytes() const;
+
+        // Every file the machine holds, with its size: the only way to see what
+        // an installer put where, on a filesystem with no host path to look at.
+        void each_file(const std::function<void(const std::string &path,
+            const std::vector<std::uint8_t> &bytes)> &visitor) const;
 
         bool exists(const std::u16string &path) override;
         bool replace(const std::u16string &old_path, const std::u16string &new_path) override;
