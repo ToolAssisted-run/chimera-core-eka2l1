@@ -298,7 +298,11 @@ else
 			# installs it, puts the .blz where it looks, runs it and works its
 			# menu - all before the first frame anybody asked for. Both flavors
 			# must do that identically, and end with the game running.
-			blz="$(ls "$root"/tests/roms-local/*.blz 2>/dev/null | head -1)"
+			# The gate names the games it was written against, and falls back to
+			# whatever is there. A folder of games is a collection, not a
+			# suite: one that crashes is a finding, not a broken gate.
+			blz="$root/tests/roms-local/MotoGP.blz"
+			[ -f "$blz" ] || blz="$(ls "$root"/tests/roms-local/*.blz 2>/dev/null | head -1)"
 			blzapp="$root/tests/roms-local/BLZinstapp.sis"
 
 			if [ -z "$blz" ] || [ ! -f "$blzapp" ]; then
@@ -322,7 +326,7 @@ else
 					echo "$boxz" > "$work/boxz.txt"
 					diff "$work/natz.txt" "$work/boxz.txt" | head -20; fail=$((fail + 1))
 				else
-					echo "PASS blz: the machine unpacked it and ran it, native == sandbox ($(echo "$boxz" | tr '\n' ' '))"
+					echo "PASS blz ($(basename "$blz")): the machine unpacked it and ran it, native == sandbox ($(echo "$boxz" | tr '\n' ' '))"
 					pass=$((pass + 1))
 				fi
 			fi
@@ -332,7 +336,8 @@ else
 			# archive straight onto the machine's drive E, the application
 			# list finds it, and it runs - the same instructions on both
 			# sides, which is the whole claim this core makes.
-			card="$(ls "$root"/tests/roms-local/*.rar "$root"/tests/roms-local/*.zip 2>/dev/null | head -1)"
+			card="$root/tests/roms-local/Red Faction.rar"
+			[ -f "$card" ] || card="$(ls "$root"/tests/roms-local/*.rar "$root"/tests/roms-local/*.zip 2>/dev/null | head -1)"
 
 			if [ -z "$card" ]; then
 				echo "SKIP card: no game in tests/roms-local (the game is the user's to supply)"
@@ -359,7 +364,7 @@ else
 					echo "$boxc" > "$work/boxc.txt"
 					diff "$work/natc.txt" "$work/boxc.txt" | head -20; fail=$((fail + 1))
 				else
-					echo "PASS card: native == sandbox, the game started itself ($(echo "$boxc" | grep -E '^(launched|instructions|screen):' | tr '\n' ' '))"
+					echo "PASS card ($(basename "$card")): native == sandbox, the game started itself ($(echo "$boxc" | grep -E '^(launched|instructions|screen):' | tr '\n' ' '))"
 					pass=$((pass + 1))
 				fi
 
