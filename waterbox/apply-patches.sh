@@ -11,6 +11,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 eka="$root/extern/eka2l1"
 
+# The submodule has to BE one. A fresh clone made without --recursive leaves
+# extern/eka2l1 an empty directory, and every git command run in it answers for
+# the repository above it instead - so the series would be applied to this
+# repository's own working tree, quietly, and nothing would say so.
+if [ "$(git -C "$eka" rev-parse --show-toplevel 2>/dev/null)" != "$eka" ]; then
+	echo "extern/eka2l1 is not checked out; run:" >&2
+	echo "  git submodule update --init --recursive" >&2
+	exit 1
+fi
+
 # Untracked files count too: a patch that adds a file cannot be applied twice,
 # and git diff does not see one.
 if [ -n "$(git -C "$eka" status --porcelain)" ]; then
