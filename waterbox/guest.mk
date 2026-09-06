@@ -20,6 +20,7 @@ WBFLAGS := -fvisibility=hidden -mcmodel=large -mstack-protector-guard=global -fn
 SPECS   := -specs $(SR)/lib/musl-gcc.specs
 CXXINCS := -nostdinc++ -I$(SR)/include/c++/$(GCCVER) -I$(SR)/include/c++/$(GCCVER)/x86_64-linux-musl
 MBINCS  := -I$(MB)/extern/emulibc -I$(MB)/source/guest/include -I$(MB)/extern/jsmn
+MESA    ?= /tmp/claude-1000/mesa-24.0.9
 EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/common/include \
         -I$(B)/eka2l1/src/emu/common/include -I$(EKA)/emu/config/include -I$(EKA)/emu/mem/include \
         -I$(EKA)/emu/drivers/include -I$(EKA)/emu/vfs/include -I$(EKA)/emu/utils/include \
@@ -30,13 +31,18 @@ EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/
 
 CXXFLAGS := $(WBFLAGS) $(MBINCS) $(EKAINCS) -I. $(CXXINCS)
 
-OBJS := $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/null-graphics.o $(O)/host-ui.o $(O)/guest-syscalls.o $(O)/generated-embedded-files.o
+OBJS := $(O)/gl-osmesa.o $(O)/wbx-entry.o $(O)/machine.o $(O)/vclock.o $(O)/memfs.o $(O)/gl-context.o $(O)/input.o $(O)/audio.o $(O)/null-graphics.o $(O)/host-ui.o $(O)/guest-syscalls.o $(O)/generated-embedded-files.o
 
 all: $(OBJS)
 
 $(O)/%.o: %.cpp
 	@mkdir -p $(O)
 	g++ $(SPECS) $(CXXFLAGS) -c -o $@ $<
+
+# The guest's own OpenGL, over Mesa's headers.
+$(O)/gl-osmesa.o: gl-osmesa.c
+	@mkdir -p $(O)
+	gcc $(SPECS) $(WBFLAGS:-std=gnu++20=) -std=gnu11 $(MBINCS) -I$(MESA)/include -c -o $@ $<
 
 # The files the emulator would have opened beside itself. There is no beside
 # in the sandbox, so they are compiled in.

@@ -1,0 +1,52 @@
+--- a/src/emu/common/include/common/queue.h
++++ b/src/emu/common/include/common/queue.h
+@@ -188,6 +188,32 @@
+             queue_empty_cond_.notify_one();
+         }
+ 
++        /**
++         * @brief Take what is already there, and never wait.
++         *
++         * pop() with a timeout still waits on a condition variable when the
++         * queue is empty, and an owner that drives this queue from its own
++         * loop must never do that: there is nobody else to put work in, and in
++         * a sandbox with one thread a wait with a timeout is a wait forever.
++         */
++        std::optional<T> try_pop() {
++            T item{ T() };
++
++            {
++                const std::lock_guard<std::mutex> guard(queue_mut_);
++
++                if (abort_ || queue_.empty()) {
++                    return std::nullopt;
++                }
++
++                item = queue_.front();
++                queue_.pop();
++            }
++
++            queue_cond_.notify_one();
++            return item;
++        }
++
+         std::optional<T> pop(const int ms = 0) {
+             T item{ T() };
+ 
+--- a/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp
++++ b/src/emu/drivers/src/graphics/backend/ogl/graphics_ogl.cpp
+@@ -1953,10 +1953,11 @@
+     void ogl_graphics_driver::pump() {
+         // Everything queued, and not a moment more. An owner with a loop of
+         // its own runs the driver between its own steps rather than giving it
+-        // a thread: one microsecond is the shortest wait the queue takes, and
+-        // it is only ever reached when the queue is already empty.
++        // a thread, so this must never wait: there is no other thread to put
++        // work in, and in a sandbox a wait with a timeout is a wait forever -
++        // the guest parks on the futex and nothing ever wakes it.
+         while (!should_stop) {
+-            std::optional<command_list> list = list_queue.pop(1);
++            std::optional<command_list> list = list_queue.try_pop();
+ 
+             if (!list) {
+                 return;

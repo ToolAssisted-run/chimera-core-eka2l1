@@ -108,6 +108,10 @@ namespace {
 
 extern "C" {
 
+// The guest's own OpenGL (waterbox/gl-osmesa.c).
+int chimera_osmesa_start(int width, int height);
+void *chimera_osmesa_proc(const char *name);
+
 ECL_EXPORT const char *GetLoadError(void) {
     return g_loadError;
 }
@@ -124,12 +128,22 @@ ECL_EXPORT int Init(void) {
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();
 
-    // There is no OpenGL in a sandbox, and a machine with no graphics driver
-    // at all dies the moment an application asks the window server to compose
-    // anything. This one accepts every drawing command and keeps none: what a
-    // game draws through direct screen access is read out of the panel it
-    // painted, which needs no driver at all.
-    g_machine->start_null_graphics();
+    // The machine's OpenGL. There is no GPU here and no host driver to borrow
+    // one from, so the core carries its own: Mesa's softpipe, compiled in. It
+    // is what an application that draws through the window server needs, and
+    // there are plenty - a game that paints the panel itself does not, which
+    // is why this was not always here.
+    //
+    // If it cannot be had, a driver that draws nowhere at least keeps the
+    // machine alive: a window server with no driver at all dies on the first
+    // canvas anybody asks it to compose.
+    if (chimera_osmesa_start(MAX_WIDTH, MAX_HEIGHT)) {
+        g_machine->start_graphics(chimera_osmesa_proc);
+    }
+
+    if (!g_machine->has_graphics()) {
+        g_machine->start_null_graphics();
+    }
     g_machine->start_audio();
 
     // The drives, before the device: setting the device loads the ROM and asks

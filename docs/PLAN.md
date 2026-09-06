@@ -634,3 +634,53 @@ lasted about forty seconds.
 The native reference uses the same driver whenever it is not asked for a picture,
 so both flavors are the same machine: `1,050,990,966` instructions and screen
 `18db086fd87c329e` on either side.
+
+## The machine's own OpenGL (2026-09-06)
+
+Not every game paints the panel itself. King Of Fighters draws through the
+WINDOW SERVER - its visible window is a redraw canvas, a recorded list of draw
+commands that only exist as pixels once something composes them - and composing
+needs an OpenGL. The sandbox has no GPU to borrow one from, so the core carries
+its own: **Mesa 24.0.9, OSMesa front end, softpipe, no LLVM**, compiled into
+core.wbx (`waterbox/gl-osmesa.c`). softpipe is plain C with no JIT and no
+dispatch on host CPU features, so what it draws is decided entirely by code we
+compiled, which is the only kind of renderer a core that replays movies can use.
+
+The recipe and its five patches are not ours - they are
+`~/minihawk-tools/mesa-guest/`, proven on 2026-08-28 and already carried by
+three other cores. What this core had to add was one bug of its own:
+
+**A driven driver must never wait.** `pump()` took the driver's command queue
+with `pop(1)` - a one microsecond timed wait when the queue is empty. On a host
+that returns; in the sandbox the guest parks on the futex and nothing ever wakes
+it, because there is no other thread to put work in. miniBox says it plainly:
+"all threads fell asleep. states: t1=W". Patch 0027 gives the queue a `try_pop`
+that never waits and has `pump()` use it.
+
+**The result:** King Of Fighters composes inside the box, and the picture is
+byte for byte what the host's own OpenGL draws (`screen: 176x208 digest
+8428baf32f991081 lit 33363`) - llvmpipe and softpipe agree on this content,
+which is blits rather than shading. The machine is untouched by any of it:
+242,334,156 instructions with the null driver, with the host's GL, and with
+Mesa in the box.
+
+**What it costs:** the package goes from 8 MB to 12.3 MB. The linked core is 44
+MB, two thirds of which was Mesa's DWARF until `strip --strip-debug` (the
+symbol table stays: the host resolves this core's exports out of it).
+
+## The other games (2026-09-06)
+
+The user's four new cards, on this ROM:
+
+- **FIFA 2005** works, and always did.
+- **King Of Fighters** works now, and is why the OpenGL above exists.
+- **Tomb Raider** unpacks from its .blz and starts, then asks for
+  `whichservice.dll` - which is nowhere in this ROM image; the loader says so
+  and the game puts up "System error" and quits. It needs a fuller N-Gage dump,
+  not a core change.
+- **FIFA 2004** branches through a garbage function pointer (`blx r12` with
+  r12 = 0x1b) about 1.4 million instructions in, right after opening its save
+  files through the POSIX service. It fails identically on EKA2L1's own
+  filesystem with none of this core involved, so it is an upstream
+  compatibility gap rather than anything here. Not TLS: the EKA1 executor's
+  set_tls (0x34) is called and every later lookup finds its slot.

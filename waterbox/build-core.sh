@@ -43,16 +43,44 @@ mkdir -p "$out"
 # One group: the archives cross-reference each other freely.
 libs="$(find "$root/build/guest" -name '*.a' | sort | tr '\n' ' ')"
 
+# And the machine's OpenGL, if a guest Mesa has been built for it. Softpipe,
+# compiled in: see waterbox/gl-osmesa.c. The final libOSMesa.so link of Mesa's
+# own build fails by design here (no PIC in a guest), so the archives are taken
+# straight, plus the target object that carries osmesa_create_screen.
+mesa="${MESA_GUEST_DIR:-/tmp/claude-1000/mesa-24.0.9}"
+mesa_libs=""
+mesa_force=""
+
+if [ -d "$mesa/build-guest" ]; then
+	mesa_libs="$(find "$mesa/build-guest" -name '*.a' | sort | tr '\n' ' ')"
+	mesa_libs="$mesa_libs $(find "$mesa/build-guest/src/gallium/targets/osmesa" -name 'target.c.o' | head -1)"
+
+	# Mesa declares these weak as a build workaround; in a static guest link
+	# nothing else pulls them in and they resolve to address zero, which Mesa
+	# then calls when it makes its first recursive mutex.
+	mesa_force="-Wl,-u,pthread_mutexattr_init -Wl,-u,pthread_mutexattr_settype -Wl,-u,pthread_mutexattr_destroy"
+
+	echo "linking the guest's own OpenGL from $mesa"
+else
+	echo "no guest Mesa at $mesa - the machine will draw only what it paints itself"
+fi
+
 g++ -specs "$sr/lib/musl-gcc.specs" -mcmodel=large -fno-pic -fno-pie \
 	-static -no-pie -Wl,--eh-frame-hdr,-O2,--no-relax,-z,stack-size=8388608 -T "$mb/source/guest/linkscript.T" \
 	-Wl,-u,pthread_once -Wl,-u,pthread_cond_wait -Wl,-u,pthread_cond_broadcast -Wl,-u,pthread_key_create \
 	-Wl,-u,pthread_mutexattr_init -Wl,-u,pthread_mutexattr_settype -Wl,-u,pthread_mutexattr_destroy \
 	-o "$out/core.wbx" \
-	"$here"/obj-guest/wbx-entry.o "$here"/obj-guest/machine.o "$here"/obj-guest/vclock.o "$here"/obj-guest/memfs.o "$here"/obj-guest/gl-context.o "$here"/obj-guest/input.o "$here"/obj-guest/audio.o "$here"/obj-guest/null-graphics.o \
+	"$here"/obj-guest/wbx-entry.o "$here"/obj-guest/machine.o "$here"/obj-guest/vclock.o "$here"/obj-guest/memfs.o "$here"/obj-guest/gl-context.o "$here"/obj-guest/input.o "$here"/obj-guest/audio.o "$here"/obj-guest/null-graphics.o "$here"/obj-guest/gl-osmesa.o \
 	"$here"/obj-guest/host-ui.o "$here"/obj-guest/guest-syscalls.o "$here"/obj-guest/generated-embedded-files.o \
 	"$mbuild/source/guest/cxxglue.c.o" "$mbuild/source/guest/emulibc.c.o" \
-	-Wl,--start-group $libs -Wl,--end-group \
+	$mesa_force \
+	-Wl,--start-group $libs $mesa_libs -Wl,--end-group \
 	-L"$sr/lib" -lstdc++ -lgcc -lgcc_eh -lc
+# Debug information, not symbols: the host resolves this core's exports by
+# name out of the symbol table, but nothing needs Mesa's DWARF - and Mesa's
+# DWARF is two thirds of the file.
+strip --strip-debug "$out/core.wbx"
+
 sh "$mb/source/guest/check-wbx.sh" "$out/core.wbx"
 echo "built $out/core.wbx"
 

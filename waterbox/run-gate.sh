@@ -292,6 +292,40 @@ else
 				pass=$((pass + 1))
 			fi
 
+			# ---- a game that draws through the window server ------------
+			# Not every game paints the panel itself. One that draws through
+			# the window server needs the machine to COMPOSE, which needs an
+			# OpenGL - and a sandbox has no GPU to borrow one from, so the core
+			# carries Mesa's softpipe. This leg is the proof that it works:
+			# the same game, drawn inside the box, with nothing outside it.
+			wserv="$root/tests/roms-local/King Of Fighters.rar"
+
+			if [ ! -f "$wserv" ]; then
+				echo "SKIP compositor: no window-server game in tests/roms-local"
+			else
+				digest9='^(launched|instructions|screen):'
+
+				rm -rf "$work/wserv"
+				mkdir -p "$work/wserv"
+
+				natw="$(timeout 1800 "$rn" --data "$work/wserv" --rom-only "$rom" --gpu --frames 3000 --card "$wserv" 2>&1 | grep -E "$digest9" | sort)"
+				boxw="$(timeout 1800 "$rw" "$core" --frames 3000 --rom "$rom" --game "$wserv" 2>&1 | grep -E "$digest9" | sort)"
+
+				if [ -z "$boxw" ]; then
+					echo "FAIL compositor (the sandbox produced nothing)"; fail=$((fail + 1))
+				elif echo "$boxw" | grep -q "^screen: .* lit 0$"; then
+					echo "FAIL compositor (the sandbox composed nothing)"; echo "$boxw"; fail=$((fail + 1))
+				elif [ "$natw" != "$boxw" ]; then
+					echo "FAIL compositor (native vs sandbox)"
+					echo "$natw" > "$work/natw.txt"
+					echo "$boxw" > "$work/boxw.txt"
+					diff "$work/natw.txt" "$work/boxw.txt" | head -20; fail=$((fail + 1))
+				else
+					echo "PASS compositor ($(basename "$wserv")): composed inside the box, and it matches the host's own OpenGL ($(echo "$boxw" | grep '^screen:'))"
+					pass=$((pass + 1))
+				fi
+			fi
+
 			# ---- a card image the machine unpacks for itself ------------
 			# A .blz is a container this core cannot read and neither can the
 			# machine: what reads one is a Symbian application, so the core
