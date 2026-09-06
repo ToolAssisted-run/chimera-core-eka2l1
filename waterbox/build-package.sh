@@ -30,6 +30,7 @@ chimera_root="$(cd "$chimera_root" && pwd)"
 [ -n "$mb" ] || mb="$chimera_root/extern/tools/chimera-common-minibox"
 
 # the guest: upstream's CMake under the musl toolchain, then the link
+sh "$here/setup-mesa.sh" -m "$mb"
 sh "$here/build-guest.sh"
 MINIBOX_DIR="$mb" sh "$here/build-core.sh" -m "$mb"
 

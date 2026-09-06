@@ -1,0 +1,15 @@
+--- mesa-pristine/src/util/u_call_once.c	2024-06-06 18:57:27.000000000 +0000
++++ mesa-24.0.9/src/util/u_call_once.c	2026-08-28 07:48:38.179184342 +0000
+@@ -11,7 +11,12 @@
+    util_call_once_data_func func;
+ };
+ 
++/* chimera: one thread, no thread pointer - see the note in u_thread.h. */
++#if defined(CHIMERA_GUEST)
++static struct util_call_once_context_t call_once_context;
++#else
+ static thread_local struct util_call_once_context_t call_once_context;
++#endif
+ 
+ static void
+ util_call_once_data_slow_once(void)

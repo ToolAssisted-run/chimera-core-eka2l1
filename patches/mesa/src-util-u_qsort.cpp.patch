@@ -1,0 +1,19 @@
+--- mesa-pristine/src/util/u_qsort.cpp	2024-06-06 18:57:27.000000000 +0000
++++ mesa-24.0.9/src/util/u_qsort.cpp	2026-08-28 07:48:30.822075474 +0000
+@@ -24,8 +24,14 @@
+ #include "u_qsort.h"
+ #include <thread>
+ 
+-thread_local int (*tl_qsort_r_compar)(const void *, const void *, void *);
+-thread_local void *tl_qsort_r_arg;
++/* chimera: one thread, no thread pointer - see the note in u_thread.h. */
++#if defined(CHIMERA_GUEST)
++#define UTIL_QSORT_TLS
++#else
++#define UTIL_QSORT_TLS thread_local
++#endif
++UTIL_QSORT_TLS int (*tl_qsort_r_compar)(const void *, const void *, void *);
++UTIL_QSORT_TLS void *tl_qsort_r_arg;
+ 
+ static int
+ qsort_r_compar(const void *a, const void *b)

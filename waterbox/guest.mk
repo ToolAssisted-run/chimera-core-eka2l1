@@ -20,7 +20,7 @@ WBFLAGS := -fvisibility=hidden -mcmodel=large -mstack-protector-guard=global -fn
 SPECS   := -specs $(SR)/lib/musl-gcc.specs
 CXXINCS := -nostdinc++ -I$(SR)/include/c++/$(GCCVER) -I$(SR)/include/c++/$(GCCVER)/x86_64-linux-musl
 MBINCS  := -I$(MB)/extern/emulibc -I$(MB)/source/guest/include -I$(MB)/extern/jsmn
-MESA    ?= /tmp/claude-1000/mesa-24.0.9
+MESA    ?= $(ROOT)/build/mesa
 EKAINCS := -I$(EKA)/emu/system/include -I$(EKA)/emu/kernel/include -I$(EKA)/emu/common/include \
         -I$(B)/eka2l1/src/emu/common/include -I$(EKA)/emu/config/include -I$(EKA)/emu/mem/include \
         -I$(EKA)/emu/drivers/include -I$(EKA)/emu/vfs/include -I$(EKA)/emu/utils/include \

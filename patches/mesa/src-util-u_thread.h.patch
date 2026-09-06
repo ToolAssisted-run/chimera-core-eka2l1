@@ -1,0 +1,16 @@
+--- mesa-pristine/src/util/u_thread.h	2024-06-06 18:57:27.000000000 +0000
++++ mesa-24.0.9/src/util/u_thread.h	2026-08-28 07:34:42.136829111 +0000
+@@ -45,7 +45,12 @@
+  * still want to use normal TLS (which involves a function call, but not the
+  * expensive pthread_getspecific() or its equivalent).
+  */
+-#if DETECT_OS_APPLE
++#if defined(CHIMERA_GUEST)
++/* chimera: a waterbox guest has exactly one thread and no thread pointer at
++ * all - the sandbox refuses a core that touches %fs. There is nothing for
++ * these to be local to. */
++#define __THREAD_INITIAL_EXEC
++#elif DETECT_OS_APPLE
+ /* Apple Clang emits wrappers when using thread_local that break module linkage,
+  * but not with __thread
+  */

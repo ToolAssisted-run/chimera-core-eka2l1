@@ -47,7 +47,7 @@ libs="$(find "$root/build/guest" -name '*.a' | sort | tr '\n' ' ')"
 # compiled in: see waterbox/gl-osmesa.c. The final libOSMesa.so link of Mesa's
 # own build fails by design here (no PIC in a guest), so the archives are taken
 # straight, plus the target object that carries osmesa_create_screen.
-mesa="${MESA_GUEST_DIR:-/tmp/claude-1000/mesa-24.0.9}"
+mesa="${MESA_GUEST_DIR:-$root/build/mesa}"
 mesa_libs=""
 mesa_force=""
 
@@ -62,7 +62,8 @@ if [ -d "$mesa/build-guest" ]; then
 
 	echo "linking the guest's own OpenGL from $mesa"
 else
-	echo "no guest Mesa at $mesa - the machine will draw only what it paints itself"
+	echo "no guest Mesa at $mesa - run waterbox/setup-mesa.sh, or this core will"
+	echo "draw only what a game paints into the panel itself"
 fi
 
 g++ -specs "$sr/lib/musl-gcc.specs" -mcmodel=large -fno-pic -fno-pie \

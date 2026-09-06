@@ -1,0 +1,13 @@
+--- mesa-pristine/meson.build	2024-06-06 18:57:27.000000000 +0000
++++ mesa-24.0.9/meson.build	2026-08-28 07:35:49.034815782 +0000
+@@ -1298,7 +1298,9 @@
+     endif
+   endif
+ elif host_machine.cpu_family() == 'x86_64'
+-  if system_has_kms_drm
++  # chimera: the hand-written dispatch stubs read the table out of %fs, and a
++  # waterbox guest has no thread pointer. The C dispatch does the same work.
++  if system_has_kms_drm and not get_option('c_args').contains('-DCHIMERA_GUEST')
+     with_asm_arch = 'x86_64'
+     pre_args += ['-DUSE_X86_64_ASM']
+   endif

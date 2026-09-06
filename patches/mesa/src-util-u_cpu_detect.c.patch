@@ -1,0 +1,22 @@
+--- mesa-pristine/src/util/u_cpu_detect.c	2024-06-06 18:57:27.000000000 +0000
++++ mesa-24.0.9/src/util/u_cpu_detect.c	2026-08-28 07:45:20.573260763 +0000
+@@ -729,6 +729,19 @@
+ 
+    memset(&util_cpu_caps, 0, sizeof util_cpu_caps);
+ 
++#if defined(CHIMERA_GUEST)
++   /* chimera: a waterbox guest is one thread on a machine it must not look
++    * at. Asking how many CPUs there are is a syscall the sandbox does not
++    * answer - and taking a different code path per host CPU is exactly what
++    * a deterministic core cannot do. One CPU, no feature bits, same
++    * instructions everywhere. */
++   util_cpu_caps.nr_cpus = 1;
++   util_cpu_caps.max_cpus = 1;
++   util_cpu_caps.num_L3_caches = 0;
++   util_cpu_caps.num_cpu_mask_bits = 1;
++   return;
++#endif
++
+    /* Count the number of CPUs in system */
+ #if DETECT_OS_WINDOWS
+    {
