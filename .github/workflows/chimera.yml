@@ -47,7 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: true
+          # RECURSIVE. extern/eka2l1 has forty-five submodules of its own under
+          # src/external, and upstream's CMake add_subdirectory()s them by name:
+          # a one-level checkout configures into two dozen "does not contain a
+          # CMakeLists.txt file" errors before it reaches a compiler.
+          submodules: recursive
 
       - name: Check out Chimera (the waterbox host, the guest toolchain, the frontend)
         uses: actions/checkout@v6
@@ -58,9 +62,19 @@ jobs:
           submodules: false
 
       - name: Install build dependencies
+        # The last two lines are not obvious. The NATIVE reference is built the
+        # way a normal EKA2L1 is, host devices and all, so upstream's drivers
+        # ask for SDL2 and for X11/EGL/Wayland even though nothing here opens a
+        # window (the guest build turns EKA2L1_HOST_DEVICES off and needs
+        # none of them). And this core's own Mesa is a meson build: it wants
+        # Mako, flex and bison to generate its sources.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends meson ninja-build build-essential cmake pkg-config python3 mono-complete libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build build-essential cmake pkg-config python3 mono-complete \
+            libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev \
+            libsdl2-dev libwayland-dev \
+            python3-mako bison flex
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
