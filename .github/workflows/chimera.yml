@@ -1,0 +1,173 @@
+name: chimera waterbox core
+
+# The core as Chimera ships it: a sandboxed core.wbx package.
+#
+# What this job can prove on a public runner is bounded by content: a Symbian
+# phone's ROM is the user's to supply, so nothing here boots a device. What it
+# does prove needs none of that, and is most of what breaks:
+#
+#   * upstream's own 194-case suite passes in the headless configuration this
+#     port builds - the kernel, the MMU, the VFS, the loader, the services;
+#   * the ARM interpreter this core runs on agrees with a golden ALU model and
+#     with dynarmic as an independent oracle;
+#   * the machine answers the same way twice, its clock is its own, and the
+#     sandboxed build agrees with the native one.
+#
+# The legs that want a ROM or a game report SKIP and are run by hand against the
+# developer's own content (waterbox/run-gate.sh says so on every line).
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+  schedule:
+    # 04:00 UTC. A nightly is published only when main moved since the last one;
+    # the reusable workflow checks, so an unchanged core costs one idle run.
+    - cron: '0 4 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHIMERA_REF: main
+
+jobs:
+
+  core-gate:
+    # ONE job, not the two the content-rich cores use. This core's frontend half
+    # is Chimera's contract tests, which need the package and nothing else - so
+    # splitting it would build the package twice, on two runners, for no more
+    # proof than one build gives.
+    name: "core gate (upstream suite, cpu difftest, determinism)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Check out Chimera (the waterbox host, the guest toolchain, the frontend)
+        uses: actions/checkout@v6
+        with:
+          repository: ToolAssisted-run/chimera
+          ref: ${{ env.CHIMERA_REF }}
+          path: chimera-checkout
+          submodules: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends meson ninja-build build-essential cmake pkg-config python3 mono-complete libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Check out what Chimera is built from
+        working-directory: chimera-checkout
+        run: git submodule update --init --recursive extern/tools
+
+      - name: Build Chimera's natives
+        # The contract tests below open a package through the ENGINE, which is
+        # libchimera - so they dlopen a native library and fail without one.
+        # (Found by moving build/dll aside and watching them go red.)
+        working-directory: chimera-checkout
+        run: |
+          meson setup build/meson-linux --prefix "$PWD/build" --libdir dll
+          meson compile -C build/meson-linux
+          meson install -C build/meson-linux
+
+      - name: Cache the guest toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            chimera-checkout/extern/tools/chimera-common-minibox/build/meson-linux
+            chimera-checkout/extern/tools/chimera-common-minibox/build/meson-cpp
+          key: guest-cpp-${{ runner.os }}-${{ hashFiles('chimera-checkout/extern/tools/chimera-common-minibox/.git') }}-${{ hashFiles('chimera-checkout/extern/tools/chimera-common-minibox/meson.build') }}
+
+      - name: Build miniBox (host + C++ guest toolchain)
+        run: |
+          mb="$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+          [ -f "$mb/build/meson-linux/build.ninja" ] || meson setup "$mb/build/meson-linux" "$mb"
+          meson compile -C "$mb/build/meson-linux"
+          [ -f "$mb/build/meson-cpp/build.ninja" ] || meson setup "$mb/build/meson-cpp" "$mb" -Dguest_cpp=true
+          meson compile -C "$mb/build/meson-cpp"
+
+      - name: Build the native reference, the upstream suite and the cpu difftest
+        run: |
+          ./waterbox/build-native.sh
+          ./waterbox/build-difftest.sh
+
+      - name: Build the guest Mesa (softpipe + OSMesa) the window server draws through
+        # This core carries its own Mesa: setup-mesa.sh fetches and patches a
+        # pinned tarball rather than using Chimera's mesa-guest submodule.
+        run: sh waterbox/setup-mesa.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+
+      - name: Build the waterbox core
+        run: |
+          ./waterbox/build-guest.sh
+          MINIBOX_DIR="$PWD/chimera-checkout/extern/tools/chimera-common-minibox" \
+            sh waterbox/build-core.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+
+      - name: Core gate
+        run: ./waterbox/run-gate.sh
+
+      - name: Build and install the waterbox core package
+        # The commit is the core's authoritative version: this build is the one
+        # that publishes the artifact, so what it stamps is what a movie can
+        # cite. A package built by hand stamps "+local" instead.
+        env:
+          CORE_VERSION: ${{ github.sha }}
+        run: ./waterbox/build-package.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox" -r "$PWD/chimera-checkout"
+
+      - name: The package through the real frontend
+        # Chimera's own contract tests, run against THIS package: it must be
+        # readable, built for an ABI this frontend runs, become a working
+        # factory, bind only buttons its controller declares, and stamp a
+        # version. No rom, no firmware, no emulation - which is exactly why it
+        # is the frontend check a core like this one can make.
+        working-directory: chimera-checkout
+        env:
+          CHIMERA_CORES_DIR: ${{ github.workspace }}/chimera-checkout/build/Cores
+        run: |
+          dotnet test source/gui/Chimera.Tests.Client.Common/Chimera.Tests.Client.Common.csproj \
+            -c Release --nologo \
+            --filter "FullyQualifiedName~InstalledCorePackagesTests|FullyQualifiedName~MnemonicUniquenessTests"
+
+      - name: Publish the core package
+        uses: actions/upload-artifact@v7
+        with:
+          name: eka2l1-${{ github.sha }}
+          path: chimera-checkout/build/Cores/eka2l1.chimeraCore
+          if-no-files-found: error
+
+      - name: Upload the gate work dir on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-gate-work
+          path: waterbox/tests/work/
+
+  publish:
+    # What the gate passed, published as this core's own release: a rolling
+    # `dev` on every green push to main, an immutable `nightly-YYYY-MM-DD` from
+    # the scheduled run. Chimera ships no cores; its Core Manager downloads
+    # them from here.
+    #
+    # The logic is Chimera's tools/publish-core.sh, called through one reusable
+    # workflow, so all fifteen cores publish the same way and there is one place
+    # to change it.
+    name: publish
+    needs: [ core-gate ]
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    uses: ToolAssisted-run/chimera/.github/workflows/publish-core.yml@main
+    with:
+      core-id: eka2l1
+      artifact: eka2l1-${{ github.sha }}
+      package: eka2l1.chimeraCore
