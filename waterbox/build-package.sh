@@ -31,8 +31,8 @@ chimera_root="$(cd "$chimera_root" && pwd)"
 
 # the guest: upstream's CMake under the musl toolchain, then the link
 sh "$here/setup-mesa.sh" -m "$mb"
-sh "$here/build-guest.sh"
-MINIBOX_DIR="$mb" sh "$here/build-core.sh" -m "$mb"
+sh "$here/build-guest.sh" -m "$mb"
+sh "$here/build-core.sh" -m "$mb"
 
 staging="$root/build/package-staging"
 rm -rf "$staging"
