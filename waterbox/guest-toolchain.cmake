@@ -6,10 +6,21 @@
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
-if(NOT DEFINED ENV{MINIBOX_SYSROOT})
-  set(SR "$ENV{HOME}/chimera/extern/chimera-common-minibox/build/meson-cpp/guest-sysroot")
-else()
+# Where the guest sysroot is. MINIBOX_SYSROOT names it outright, MINIBOX_DIR
+# names the miniBox checkout it lives in (build-guest.sh sets one of them from
+# its -m), and only a developer's own tree is at $HOME/chimera.
+if(DEFINED ENV{MINIBOX_SYSROOT})
   set(SR "$ENV{MINIBOX_SYSROOT}")
+elseif(DEFINED ENV{MINIBOX_DIR})
+  set(SR "$ENV{MINIBOX_DIR}/build/meson-cpp/guest-sysroot")
+else()
+  set(SR "$ENV{HOME}/chimera/extern/chimera-common-minibox/build/meson-cpp/guest-sysroot")
+endif()
+
+# A path that is not there produces "cannot read spec file" out of a CMake
+# compiler probe, which says nothing about what is actually wrong.
+if(NOT EXISTS "${SR}/lib/musl-gcc.specs")
+  message(FATAL_ERROR "miniBox guest sysroot not at ${SR} - pass build-guest.sh -m <miniBox dir>")
 endif()
 
 execute_process(COMMAND gcc -dumpfullversion OUTPUT_VARIABLE GCCVER OUTPUT_STRIP_TRAILING_WHITESPACE)

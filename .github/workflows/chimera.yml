@@ -123,9 +123,9 @@ jobs:
 
       - name: Build the waterbox core
         run: |
-          ./waterbox/build-guest.sh
-          MINIBOX_DIR="$PWD/chimera-checkout/extern/chimera-common-minibox" \
-            sh waterbox/build-core.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox"
+          mb="$PWD/chimera-checkout/extern/chimera-common-minibox"
+          ./waterbox/build-guest.sh -m "$mb"
+          sh waterbox/build-core.sh -m "$mb"
 
       - name: Core gate
         run: ./waterbox/run-gate.sh
