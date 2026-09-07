@@ -7,7 +7,7 @@
 ROOT   := ..
 B      := $(ROOT)/build/guest
 O      := obj-guest
-MB     ?= $(HOME)/chimera/extern/tools/chimera-common-minibox
+MB     ?= $(HOME)/chimera/extern/chimera-common-minibox
 MBUILD := $(MB)/build/meson-cpp
 SR     := $(MBUILD)/guest-sysroot
 GCCVER := $(shell gcc -dumpfullversion)

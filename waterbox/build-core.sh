@@ -12,7 +12,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-mb="${MINIBOX_DIR:-$HOME/chimera/extern/tools/chimera-common-minibox}"
+mb="${MINIBOX_DIR:-$HOME/chimera/extern/chimera-common-minibox}"
 out="$here/bin"
 jobs="$(nproc)"
 while getopts "m:o:j:" opt; do

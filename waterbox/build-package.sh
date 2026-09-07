@@ -27,7 +27,7 @@ fi
 [ -n "$chimera_root" ] && [ -d "$chimera_root" ] || {
 	echo "chimera checkout not found; pass -r <path>" >&2; exit 1; }
 chimera_root="$(cd "$chimera_root" && pwd)"
-[ -n "$mb" ] || mb="$chimera_root/extern/tools/chimera-common-minibox"
+[ -n "$mb" ] || mb="$chimera_root/extern/chimera-common-minibox"
 
 # the guest: upstream's CMake under the musl toolchain, then the link
 sh "$here/setup-mesa.sh" -m "$mb"

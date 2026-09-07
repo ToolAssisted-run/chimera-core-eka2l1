@@ -7,7 +7,7 @@ set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
 if(NOT DEFINED ENV{MINIBOX_SYSROOT})
-  set(SR "$ENV{HOME}/chimera/extern/tools/chimera-common-minibox/build/meson-cpp/guest-sysroot")
+  set(SR "$ENV{HOME}/chimera/extern/chimera-common-minibox/build/meson-cpp/guest-sysroot")
 else()
   set(SR "$ENV{MINIBOX_SYSROOT}")
 endif()

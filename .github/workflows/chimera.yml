@@ -69,7 +69,7 @@ jobs:
 
       - name: Check out what Chimera is built from
         working-directory: chimera-checkout
-        run: git submodule update --init --recursive extern/tools
+        run: git submodule update --init --recursive extern
 
       - name: Build Chimera's natives
         # The contract tests below open a package through the ENGINE, which is
@@ -85,13 +85,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            chimera-checkout/extern/tools/chimera-common-minibox/build/meson-linux
-            chimera-checkout/extern/tools/chimera-common-minibox/build/meson-cpp
-          key: guest-cpp-${{ runner.os }}-${{ hashFiles('chimera-checkout/extern/tools/chimera-common-minibox/.git') }}-${{ hashFiles('chimera-checkout/extern/tools/chimera-common-minibox/meson.build') }}
+            chimera-checkout/extern/chimera-common-minibox/build/meson-linux
+            chimera-checkout/extern/chimera-common-minibox/build/meson-cpp
+          key: guest-cpp-${{ runner.os }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/.git') }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/meson.build') }}
 
       - name: Build miniBox (host + C++ guest toolchain)
         run: |
-          mb="$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+          mb="$PWD/chimera-checkout/extern/chimera-common-minibox"
           [ -f "$mb/build/meson-linux/build.ninja" ] || meson setup "$mb/build/meson-linux" "$mb"
           meson compile -C "$mb/build/meson-linux"
           [ -f "$mb/build/meson-cpp/build.ninja" ] || meson setup "$mb/build/meson-cpp" "$mb" -Dguest_cpp=true
@@ -105,13 +105,13 @@ jobs:
       - name: Build the guest Mesa (softpipe + OSMesa) the window server draws through
         # This core carries its own Mesa: setup-mesa.sh fetches and patches a
         # pinned tarball rather than using Chimera's mesa-guest submodule.
-        run: sh waterbox/setup-mesa.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+        run: sh waterbox/setup-mesa.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox"
 
       - name: Build the waterbox core
         run: |
           ./waterbox/build-guest.sh
-          MINIBOX_DIR="$PWD/chimera-checkout/extern/tools/chimera-common-minibox" \
-            sh waterbox/build-core.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox"
+          MINIBOX_DIR="$PWD/chimera-checkout/extern/chimera-common-minibox" \
+            sh waterbox/build-core.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox"
 
       - name: Core gate
         run: ./waterbox/run-gate.sh
@@ -122,7 +122,7 @@ jobs:
         # cite. A package built by hand stamps "+local" instead.
         env:
           CORE_VERSION: ${{ github.sha }}
-        run: ./waterbox/build-package.sh -m "$PWD/chimera-checkout/extern/tools/chimera-common-minibox" -r "$PWD/chimera-checkout"
+        run: ./waterbox/build-package.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox" -r "$PWD/chimera-checkout"
 
       - name: The package through the real frontend
         # Chimera's own contract tests, run against THIS package: it must be
