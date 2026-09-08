@@ -66,6 +66,22 @@ else
 	echo "draw only what a game paints into the panel itself"
 fi
 
+# And the machine's audio decoders, if a guest FFmpeg has been built for it.
+# The submodule's prebuilt libraries are glibc and cannot be linked here, so the
+# source beside them is compiled instead: waterbox/setup-ffmpeg.sh. Without it
+# eka2l1's only audio path hands back a null stream and every game is silent.
+ff="${EKA2L1_FFMPEG_GUEST_ROOT:-$root/build/ffmpeg-guest/stage}"
+ff_libs=""
+
+if [ -d "$ff/lib" ]; then
+	ff_libs="$ff/lib/libavformat.a $ff/lib/libavcodec.a $ff/lib/libswscale.a"
+	ff_libs="$ff_libs $ff/lib/libswresample.a $ff/lib/libavutil.a"
+	echo "linking the guest's own audio decoders from $ff"
+else
+	echo "no guest FFmpeg at $ff - run waterbox/setup-ffmpeg.sh, or this core"
+	echo "will run every game without a sound"
+fi
+
 g++ -specs "$sr/lib/musl-gcc.specs" -mcmodel=large -fno-pic -fno-pie \
 	-static -no-pie -Wl,--eh-frame-hdr,-O2,--no-relax,-z,stack-size=8388608 -T "$mb/source/guest/linkscript.T" \
 	-Wl,-u,pthread_once -Wl,-u,pthread_cond_wait -Wl,-u,pthread_cond_broadcast -Wl,-u,pthread_key_create \
@@ -75,7 +91,7 @@ g++ -specs "$sr/lib/musl-gcc.specs" -mcmodel=large -fno-pic -fno-pie \
 	"$here"/obj-guest/host-ui.o "$here"/obj-guest/guest-syscalls.o "$here"/obj-guest/generated-embedded-files.o \
 	"$mbuild/source/guest/cxxglue.c.o" "$mbuild/source/guest/emulibc.c.o" \
 	$mesa_force \
-	-Wl,--start-group $libs $mesa_libs -Wl,--end-group \
+	-Wl,--start-group $libs $mesa_libs $ff_libs -Wl,--end-group \
 	-L"$sr/lib" -lstdc++ -lgcc -lgcc_eh -lc
 # Debug information, not symbols: the host resolves this core's exports by
 # name out of the symbol table, but nothing needs Mesa's DWARF - and Mesa's

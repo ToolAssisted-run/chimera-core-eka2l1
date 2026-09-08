@@ -1,0 +1,37 @@
+diff --git a/src/external/CMakeLists.txt b/src/external/CMakeLists.txt
+index e895ea5..eba415f 100644
+--- a/src/external/CMakeLists.txt
++++ b/src/external/CMakeLists.txt
+@@ -301,7 +301,31 @@ endif()
+ 
+ 
+ # FFMPEG
+-if (NOT EKA2L1_BUILD_FFMPEG)
++if (EKA2L1_FFMPEG_GUEST_ROOT)
++    # chimera: a waterbox guest compiles FFmpeg from the source beside the
++    # prebuilts rather than borrowing them. The prebuilts are built against
++    # glibc and the guest is musl, which is why this was switched off
++    # altogether - and switching it off is why every game was silent, since
++    # eka2l1's only audio path (new_dsp_out_stream) hands back a null stream
++    # without FFmpeg and nothing ever asks the audio driver for one. Built by
++    # waterbox/setup-ffmpeg.sh, decoders and all, with the host's SIMD paths
++    # disabled so every machine decodes the same samples.
++    if (NOT EXISTS "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libavcodec.a")
++        message(FATAL_ERROR
++            "EKA2L1_FFMPEG_GUEST_ROOT is set but has no libavcodec.a: "
++            "run waterbox/setup-ffmpeg.sh first.")
++    endif()
++
++    set(EKA2L1_HAVE_FFMPEG ON CACHE INTERNAL "FFmpeg is available for this build" FORCE)
++    add_library(ffmpeg INTERFACE)
++    target_include_directories(ffmpeg INTERFACE "${EKA2L1_FFMPEG_GUEST_ROOT}/include")
++    target_link_libraries(ffmpeg INTERFACE
++        "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libavformat.a"
++        "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libavcodec.a"
++        "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libswscale.a"
++        "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libswresample.a"
++        "${EKA2L1_FFMPEG_GUEST_ROOT}/lib/libavutil.a")
++elseif (NOT EKA2L1_BUILD_FFMPEG)
+     set(EKA2L1_HAVE_FFMPEG OFF CACHE INTERNAL "FFmpeg is available for this build" FORCE)
+     add_library(ffmpeg INTERFACE)
+ elseif (EKA2L1_IOS)
