@@ -127,6 +127,13 @@ jobs:
         # pinned tarball rather than using Chimera's mesa-guest submodule.
         run: sh waterbox/setup-mesa.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox"
 
+      - name: Build the guest FFmpeg the audio decoders come from
+        # The submodule's prebuilt FFmpeg is glibc; the guest is musl, so it
+        # compiles the source beside them. Without this the core builds and
+        # every game is silent - eka2l1's only audio path hands back a null
+        # stream when FFmpeg is absent.
+        run: sh waterbox/setup-ffmpeg.sh -m "$PWD/chimera-checkout/extern/chimera-common-minibox"
+
       - name: Build the waterbox core
         run: |
           mb="$PWD/chimera-checkout/extern/chimera-common-minibox"
