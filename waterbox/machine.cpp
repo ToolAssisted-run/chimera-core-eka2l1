@@ -261,6 +261,41 @@ namespace chimera {
     // pixel there, in whatever depth the panel reports. Reading it takes no
     // graphics driver and no compositor: it is machine memory, so the picture
     // is the same in every flavor and travels in the machine's savestates.
+    /* One 12-bit pixel, 0x0BGR, into 0xFFRRGGBB. Pulled out of the loop so the
+     * channel order is something a test can state rather than something only a
+     * picture can reveal: chimera#130 was this order being wrong, and nothing
+     * in the gate could have caught it because every digest agreed with
+     * itself. See colour_check_12bpp(). */
+    std::uint32_t unpack12(const std::uint16_t v)
+    {
+        const std::uint32_t b = ((v >> 8) & 0xF) * 17;
+        const std::uint32_t g = ((v >> 4) & 0xF) * 17;
+        const std::uint32_t r = (v & 0xF) * 17;
+        return 0xFF000000u | (r << 16) | (g << 8) | b;
+    }
+
+    /* Known values in, known colours out. Pure red, green and blue each live
+     * in one nibble, so a reordering cannot pass this. */
+    bool colour_check_12bpp(void)
+    {
+        struct { std::uint16_t in; std::uint32_t want; const char *what; } cases[] = {
+            { 0x000F, 0xFFFF0000u, "0x000F is red" },
+            { 0x00F0, 0xFF00FF00u, "0x00F0 is green" },
+            { 0x0F00, 0xFF0000FFu, "0x0F00 is blue" },
+            { 0x0FFF, 0xFFFFFFFFu, "0x0FFF is white" },
+            { 0x0000, 0xFF000000u, "0x0000 is black" },
+        };
+        bool ok = true;
+        for (const auto &c : cases) {
+            const std::uint32_t got = unpack12(c.in);
+            if (got != c.want) {
+                std::fprintf(stderr, "colour: %s - got %08x want %08x\n", c.what, got, c.want);
+                ok = false;
+            }
+        }
+        return ok;
+    }
+
     static bool read_framebuffer(eka2l1::epoc::screen *scr, std::vector<std::uint32_t> &out,
         int &width, int &height) {
         if (!scr->screen_buffer_chunk) {
@@ -283,6 +318,7 @@ namespace chimera {
             return false;
         }
 
+
         width = mode.size.x;
         height = mode.size.y;
         out.resize(static_cast<std::size_t>(width) * height);
@@ -297,16 +333,34 @@ namespace chimera {
 
                 switch (bpp) {
                 case 12: {
-                    // 0x0RGB, one nibble each, spread over the full range.
-                    const std::uint16_t v = *reinterpret_cast<const std::uint16_t *>(row + x * 2);
-                    r = ((v >> 8) & 0xF) * 17;
-                    g = ((v >> 4) & 0xF) * 17;
-                    b = (v & 0xF) * 17;
+                    // 0x0BGR, one nibble each, spread over the full range.
+                    //
+                    // BLUE is the high nibble, not red. The name Symbian gives
+                    // the mode (EColor4K) says nothing about the order, and
+                    // reading it as 0x0RGB is what made every N-Gage game come
+                    // out with its reds and blues exchanged (chimera#130): the
+                    // reporter's Sonic was red with a cyan face where he should
+                    // be blue with a peach one, which is exactly a red/blue
+                    // swap and is what identified this.
+                    //
+                    // Verified on the bytes rather than on the name: MotoGP's
+                    // framebuffer never sets the top nibble of any pixel in a
+                    // whole frame, so the buffer really is 12 bits in 16, and
+                    // the only question left was which end the blue was at.
+                    const std::uint32_t argb = unpack12(
+                        *reinterpret_cast<const std::uint16_t *>(row + x * 2));
+                    r = (argb >> 16) & 0xFF;
+                    g = (argb >> 8) & 0xFF;
+                    b = argb & 0xFF;
                     break;
                 }
 
                 case 16: {
-                    // 565.
+                    // 565. UNVERIFIED: nothing on this machine draws in this
+                    // mode, so unlike the 12-bit case above this order has
+                    // never been checked against a picture whose colours are
+                    // known. If a game ever comes out with its reds and blues
+                    // exchanged, look here first and check it the same way.
                     const std::uint16_t v = *reinterpret_cast<const std::uint16_t *>(row + x * 2);
                     r = ((v >> 11) & 0x1F) * 255 / 31;
                     g = ((v >> 5) & 0x3F) * 255 / 63;

@@ -144,6 +144,24 @@ fi
 # Only when the user's own ROM is here. It is never committed, and the gate
 # says so rather than failing when it is absent.
 rom="$root/tests/roms-local/SYM.ROM"
+
+# ---- the picture's colours -----------------------------------------------
+# chimera#130: every N-Gage game came out with its reds and blues exchanged,
+# because the 12-bit display mode was read as 0x0RGB when the blue is in the
+# high nibble. Nothing in this gate could have caught it: every digest agreed
+# with itself, and a screenshot only says what it says to somebody looking.
+#
+# So the order is asserted on values whose colours are not a matter of
+# opinion - pure red, green and blue each live in one nibble - which needs no
+# machine, no content and no picture, and fails the moment somebody reorders
+# them. Watched red against the old order: it named 0x000F and 0x0F00.
+if out="$("$rn" --colour-check 2>&1)"; then
+	echo "PASS colour (12-bit pixels unpack to the colours they name)"
+	pass=$((pass + 1))
+else
+	echo "FAIL colour: $out"; fail=$((fail + 1))
+fi
+
 installer="$root/build/native/install-device"
 
 if [ ! -f "$rom" ] || [ ! -x "$installer" ]; then

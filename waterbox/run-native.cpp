@@ -121,6 +121,12 @@ int main(int argc, char **argv) {
 
         if ((std::strcmp(argv[i], "--data") == 0) && has_value) {
             options.storage = argv[++i];
+        } else if (std::strcmp(argv[i], "--colour-check") == 0) {
+            /* the pixel unpack, on values whose colours are not a matter of
+             * opinion - no machine, no content, no picture needed */
+            const bool colour_ok = chimera::colour_check_12bpp();
+            std::printf("colour-check: %s\n", colour_ok ? "ok" : "FAILED");
+            return colour_ok ? 0 : 1;
         } else if ((std::strcmp(argv[i], "--frames") == 0) && has_value) {
             frames = std::atoi(argv[++i]);
         } else if ((std::strcmp(argv[i], "--fps") == 0) && has_value) {

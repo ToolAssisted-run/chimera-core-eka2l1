@@ -21,6 +21,11 @@ namespace eka2l1 {
 }
 
 namespace chimera {
+
+    /* Known 12-bit values into known colours: the check chimera#130 needed
+     * and the gate did not have. */
+    bool colour_check_12bpp(void);
+
     class audio_sink;
 
     struct machine_options {
