@@ -25,6 +25,18 @@ endif()
 
 execute_process(COMMAND gcc -dumpfullversion OUTPUT_VARIABLE GCCVER OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+# The compiler is PINNED to 13 where it exists, as CI's runner has it: GCC 14
+# makes an implicit function declaration an error, and upstream's libarchive
+# calls arc4random_buf, which the guest's musl 1.2.0 does not declare (its
+# configure check links against a static archive, so it says yes). The tree
+# built on this machine before 2026-09-23 got through only because it had been
+# configured by hand with -Wno-implicit-function-declaration and friends -
+# flags nothing in this repository sets - and a fresh configure failed.
+find_program(GUEST_GCC NAMES gcc-13 gcc NO_CMAKE_FIND_ROOT_PATH)
+find_program(GUEST_GXX NAMES g++-13 g++ NO_CMAKE_FIND_ROOT_PATH)
+set(CMAKE_C_COMPILER "${GUEST_GCC}")
+set(CMAKE_CXX_COMPILER "${GUEST_GXX}")
+
 set(WB "-specs=${SR}/lib/musl-gcc.specs -fvisibility=hidden -mcmodel=large -mstack-protector-guard=global -fno-stack-protector -fno-pic -fno-pie -fcf-protection=none -DCHIMERA_CORE -DCHIMERA_GUEST -DDISABLE_LOGGING -Dthread_local= -D_Thread_local= -D__thread=")
 set(CMAKE_C_FLAGS_INIT "${WB}")
 set(CMAKE_CXX_FLAGS_INIT "${WB} -nostdinc++ -I${SR}/include/c++/${GCCVER} -I${SR}/include/c++/${GCCVER}/x86_64-linux-musl")
