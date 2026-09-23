@@ -17,12 +17,12 @@ EKA2L1_OPTS="
 "
 export EKA2L1_OPTS
 
-# FFmpeg is the guest's alone. The submodule's prebuilt libraries are built
-# against glibc, so the guest cannot link them and compiles the source beside
-# them instead (waterbox/setup-ffmpeg.sh) - which is what gives games their
-# sound. The native reference and the cpu difftest have no use for audio and
-# are left as they were, off, rather than made to depend on a build step that
-# is only about the guest.
+# FFmpeg is compiled from the source beside the submodule's prebuilt libraries
+# (waterbox/setup-ffmpeg.sh), which are glibc and which the musl guest cannot
+# link - and it is what gives games their sound. The native reference builds
+# the same source for the host (build-native.sh, setup-ffmpeg.sh -n): whether
+# a sound stream opens decides what a game does, so a reference without FFmpeg
+# is a different machine. The cpu difftest runs no game and does without.
 EKA2L1_GUEST_FFMPEG_OPTS="
 -DEKA2L1_BUILD_FFMPEG=ON
 -DEKA2L1_FFMPEG_GUEST_ROOT=$root/build/ffmpeg-guest/stage

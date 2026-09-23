@@ -34,19 +34,23 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 mb="${MINIBOX_DIR:-$HOME/chimera/extern/chimera-common-minibox}"
 jobs="$(nproc)"
-while getopts "m:j:" opt; do
+native=0
+while getopts "m:j:n" opt; do
 	case "$opt" in
 		m) mb="$OPTARG" ;;
 		j) jobs="$OPTARG" ;;
+		n) native=1 ;;
 		*) exit 2 ;;
 	esac
 done
-mb="$(cd "$mb" && pwd)"
-sr="${MINIBOX_SYSROOT:-$mb/build/meson-cpp/guest-sysroot}"
-[ -f "$sr/lib/musl-gcc.specs" ] || {
-	echo "miniBox C++ guest toolchain missing at $sr" >&2
-	exit 1
-}
+if [ "$native" -eq 0 ]; then
+	mb="$(cd "$mb" && pwd)"
+	sr="${MINIBOX_SYSROOT:-$mb/build/meson-cpp/guest-sysroot}"
+	[ -f "$sr/lib/musl-gcc.specs" ] || {
+		echo "miniBox C++ guest toolchain missing at $sr" >&2
+		exit 1
+	}
+fi
 
 src="$root/extern/eka2l1/src/external/ffmpeg"
 [ -f "$src/configure" ] || {
@@ -56,20 +60,38 @@ src="$root/extern/eka2l1/src/external/ffmpeg"
 
 out="$root/build/ffmpeg-guest"
 stage="$out/stage"
-mkdir -p "$out"
 
 # The same flags the guest toolchain compiles everything else with: the fixed
 # base wants the large code model and no PIC, and the sandbox has no stack
 # protector to call into.
-wb="-specs=$sr/lib/musl-gcc.specs -fvisibility=hidden -mcmodel=large"
+wb="-specs=${sr:-}/lib/musl-gcc.specs -fvisibility=hidden -mcmodel=large"
 wb="$wb -mstack-protector-guard=global -fno-stack-protector -fno-pic -fno-pie -fcf-protection=none"
+ld="-static"
+pic=""
+
+# -n: the same FFmpeg, from the same source with the same components, for the
+# NATIVE reference. It used to have none, on the reasoning that a reference has
+# no use for sound - but whether a sound stream can be opened decides what the
+# machine does: without FFmpeg eka2l1's new_dsp_out_stream hands back nothing,
+# an X-Forge game kills its sound thread and waits for it forever, and the
+# reference parted from the sandbox 34 frames into MotoGP. Host compiler, host
+# libc, position-independent for a PIE executable, and still no assembly and
+# no runtime CPU detection, so it decodes the samples the guest decodes.
+if [ "$native" -eq 1 ]; then
+	out="$root/build/ffmpeg-native"
+	stage="$out/stage"
+	wb=""
+	ld=""
+	pic="--enable-pic"
+fi
+mkdir -p "$out"
 
 if [ ! -f "$out/config.h" ]; then
 	( cd "$out" && "$src/configure" \
 		--prefix="$stage" \
 		--cc=gcc \
 		--extra-cflags="$wb" \
-		--extra-ldflags="-static" \
+		--extra-ldflags="$ld" $pic \
 		--disable-everything \
 		--disable-programs --disable-doc --disable-shared --enable-static \
 		--disable-asm --disable-runtime-cpudetect \
