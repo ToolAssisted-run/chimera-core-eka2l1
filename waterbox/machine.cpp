@@ -261,33 +261,66 @@ namespace chimera {
     // pixel there, in whatever depth the panel reports. Reading it takes no
     // graphics driver and no compositor: it is machine memory, so the picture
     // is the same in every flavor and travels in the machine's savestates.
-    /* One 12-bit pixel, 0x0BGR, into 0xFFRRGGBB. Pulled out of the loop so the
-     * channel order is something a test can state rather than something only a
-     * picture can reveal: chimera#130 was this order being wrong, and nothing
-     * in the gate could have caught it because every digest agreed with
-     * itself. See colour_check_12bpp(). */
+    /* One 12-bit pixel, 0x0RGB, into 0xFFRRGGBB - red in the high nibble, as
+     * Symbian's EColor4K has it and as the emulator's own bitmap decoder reads
+     * it (services/src/fbs/impls/bitmap.cpp). Pulled out of the loop so the
+     * channel order is something a test states rather than something only a
+     * picture reveals. See colour_check_12bpp(). */
     std::uint32_t unpack12(const std::uint16_t v)
     {
-        const std::uint32_t b = ((v >> 8) & 0xF) * 17;
+        const std::uint32_t r = ((v >> 8) & 0xF) * 17;
         const std::uint32_t g = ((v >> 4) & 0xF) * 17;
-        const std::uint32_t r = (v & 0xF) * 17;
+        const std::uint32_t b = (v & 0xF) * 17;
         return 0xFF000000u | (r << 16) | (g << 8) | b;
     }
 
-    /* Known values in, known colours out. Pure red, green and blue each live
-     * in one nibble, so a reordering cannot pass this. */
+    /* One pixel as the compositor's readback leaves it - the bytes R, G, B, A
+     * in memory (GL_RGBA, unsigned bytes) - into 0xFFRRGGBB, the order every
+     * other path here produces and the frontend reads. Taken as a word on a
+     * little-endian host that is 0xAABBGGRR: red and blue exchanged, which is
+     * what chimera#130 was. */
+    std::uint32_t rgba_bytes_to_argb(const std::uint32_t word)
+    {
+        return 0xFF000000u | ((word & 0xFFu) << 16) | (word & 0xFF00u) | ((word >> 16) & 0xFFu);
+    }
+
+    /* Known values in, known colours out, for both paths a picture takes.
+     * Pure red, green and blue each live in one channel, so a reordering
+     * cannot pass this.
+     *
+     * chimera#130's history is why both are here. The reporter's Sonic was
+     * drawn red where he is blue, and the first fix exchanged the channels of
+     * the 12-bit DIRECT path - which that game never takes: its picture is the
+     * window server's, composed and read back as RGBA bytes, and the colours
+     * in the before and after screenshots are identical, value for value. That
+     * fix made the direct path wrong (MotoGP draws there after its first 433
+     * frames) and left the compositor as it was. */
     bool colour_check_12bpp(void)
     {
-        struct { std::uint16_t in; std::uint32_t want; const char *what; } cases[] = {
-            { 0x000F, 0xFFFF0000u, "0x000F is red" },
-            { 0x00F0, 0xFF00FF00u, "0x00F0 is green" },
-            { 0x0F00, 0xFF0000FFu, "0x0F00 is blue" },
-            { 0x0FFF, 0xFFFFFFFFu, "0x0FFF is white" },
-            { 0x0000, 0xFF000000u, "0x0000 is black" },
+        struct { std::uint16_t in; std::uint32_t want; const char *what; } cases12[] = {
+            { 0x0F00, 0xFFFF0000u, "12-bit 0x0F00 is red" },
+            { 0x00F0, 0xFF00FF00u, "12-bit 0x00F0 is green" },
+            { 0x000F, 0xFF0000FFu, "12-bit 0x000F is blue" },
+            { 0x0FFF, 0xFFFFFFFFu, "12-bit 0x0FFF is white" },
+            { 0x0000, 0xFF000000u, "12-bit 0x0000 is black" },
+        };
+        /* bytes R,G,B,A read as a little-endian word */
+        struct { std::uint32_t in; std::uint32_t want; const char *what; } cases32[] = {
+            { 0xFF0000FFu, 0xFFFF0000u, "RGBA bytes FF 00 00 FF are red" },
+            { 0xFF00FF00u, 0xFF00FF00u, "RGBA bytes 00 FF 00 FF are green" },
+            { 0xFFFF0000u, 0xFF0000FFu, "RGBA bytes 00 00 FF FF are blue" },
+            { 0xFFEE4400u, 0xFF0044EEu, "Sonic's blue, as the compositor hands it over" },
         };
         bool ok = true;
-        for (const auto &c : cases) {
+        for (const auto &c : cases12) {
             const std::uint32_t got = unpack12(c.in);
+            if (got != c.want) {
+                std::fprintf(stderr, "colour: %s - got %08x want %08x\n", c.what, got, c.want);
+                ok = false;
+            }
+        }
+        for (const auto &c : cases32) {
+            const std::uint32_t got = rgba_bytes_to_argb(c.in);
             if (got != c.want) {
                 std::fprintf(stderr, "colour: %s - got %08x want %08x\n", c.what, got, c.want);
                 ok = false;
@@ -333,20 +366,8 @@ namespace chimera {
 
                 switch (bpp) {
                 case 12: {
-                    // 0x0BGR, one nibble each, spread over the full range.
-                    //
-                    // BLUE is the high nibble, not red. The name Symbian gives
-                    // the mode (EColor4K) says nothing about the order, and
-                    // reading it as 0x0RGB is what made every N-Gage game come
-                    // out with its reds and blues exchanged (chimera#130): the
-                    // reporter's Sonic was red with a cyan face where he should
-                    // be blue with a peach one, which is exactly a red/blue
-                    // swap and is what identified this.
-                    //
-                    // Verified on the bytes rather than on the name: MotoGP's
-                    // framebuffer never sets the top nibble of any pixel in a
-                    // whole frame, so the buffer really is 12 bits in 16, and
-                    // the only question left was which end the blue was at.
+                    // 0x0RGB, one nibble each, spread over the full range
+                    // (unpack12, and the history there).
                     const std::uint32_t argb = unpack12(
                         *reinterpret_cast<const std::uint16_t *>(row + x * 2));
                     r = (argb >> 16) & 0xFF;
@@ -423,6 +444,7 @@ namespace chimera {
             return true;
         }
 
+
         if (!gdriver_) {
             return false;
         }
@@ -448,8 +470,17 @@ namespace chimera {
         height = size.y;
         out.resize(static_cast<std::size_t>(width) * height);
 
-        return eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
-            eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()));
+        if (!eka2l1::drivers::read_bitmap(gdriver_.get(), scr->screen_texture, eka2l1::point(0, 0),
+                eka2l1::object_size(width, height), 32, reinterpret_cast<std::uint8_t *>(out.data()))) {
+            return false;
+        }
+
+        // RGBA bytes, where the frontend reads 0xFFRRGGBB (rgba_bytes_to_argb).
+        for (std::uint32_t &pixel : out) {
+            pixel = rgba_bytes_to_argb(pixel);
+        }
+
+        return true;
     }
 
     static eka2l1::applist_server *app_list(eka2l1::system *sys) {
