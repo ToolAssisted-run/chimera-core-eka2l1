@@ -7,6 +7,14 @@ project(chimera_eka2l1 CXX C)
 
 set(CHIMERA_EKA2L1_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 
+# Every local the emulator leaves uninitialised starts as zero, not as whatever
+# the host's stack held. The emulated services hand the guest whole host structs
+# - a volume's info, a directory entry, a phone's network - and their unset
+# fields and padding are read by the machine: with the host's stack in them, an
+# EKA2 phone ran a different number of instructions every run (chimera#133).
+# One flag closes every such site, including those nobody has found yet.
+add_compile_options(-ftrivial-auto-var-init=zero)
+
 add_subdirectory(${CHIMERA_EKA2L1_ROOT}/extern/eka2l1 eka2l1)
 
 # The files the emulator expects to find beside itself - its patch libraries

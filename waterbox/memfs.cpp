@@ -138,7 +138,7 @@ namespace chimera {
         }
 
         std::size_t write_file(const void *data, std::uint32_t size, std::uint32_t count) override {
-            if (!(mode_ & WRITE_MODE) && !(mode_ & APPEND_MODE)) {
+            if ((!(mode_ & WRITE_MODE) && !(mode_ & APPEND_MODE)) || node_->fixed) {
                 return 0;
             }
 
@@ -170,7 +170,8 @@ namespace chimera {
             }
 
 
-            std::memcpy(data, node_->bytes.data() + position_, static_cast<std::size_t>(want));
+            const std::uint8_t *from = node_->fixed ? node_->fixed : node_->bytes.data();
+            std::memcpy(data, from + position_, static_cast<std::size_t>(want));
             position_ += want;
 
 
@@ -186,7 +187,7 @@ namespace chimera {
         }
 
         std::uint64_t size() const override {
-            return node_->bytes.size();
+            return node_->fixed ? node_->fixed_size : node_->bytes.size();
         }
 
         std::uint64_t seek(std::int64_t offset, eka2l1::file_seek_mode where) override {
@@ -247,6 +248,10 @@ namespace chimera {
         }
 
         bool resize(const std::size_t new_size) override {
+            if (node_->fixed) {
+                return false;
+            }
+
             node_->bytes.resize(new_size);
             return true;
         }
@@ -483,6 +488,148 @@ namespace chimera {
         return true;
     }
 
+    int memory_file_system::mount_rpkg(const drive_number drv, std::vector<std::uint8_t> package) {
+        const std::uint8_t *at = package.data();
+        const std::uint8_t *end = at + package.size();
+
+        auto take = [&at, end](void *out, const std::size_t n) {
+            if (static_cast<std::size_t>(end - at) < n) {
+                return false;
+            }
+
+            std::memcpy(out, at, n);
+            at += n;
+            return true;
+        };
+
+        // The header, as the emulator's installer reads it (rpkg.cpp): four
+        // words of magic - one letter to a 32-bit word - the ROM's version, the entry count, and on the
+        // second format the header's own size and the machine's UID.
+        std::uint32_t magic[4];
+        std::uint8_t major_rom = 0;
+        std::uint8_t minor_rom = 0;
+        std::uint16_t build_rom = 0;
+        std::uint32_t count = 0;
+
+        if (!take(magic, 16) || (magic[0] != 'R') || (magic[1] != 'P') || (magic[2] != 'K')
+            || ((magic[3] != 'G') && (magic[3] != '2'))) {
+            return -1;
+        }
+
+        if (!take(&major_rom, 1) || !take(&minor_rom, 1) || !take(&build_rom, 2) || !take(&count, 4)) {
+            return -1;
+        }
+
+        if (magic[3] == '2') {
+            std::uint32_t header_size = 0;
+            std::uint32_t machine_uid = 0;
+
+            if (!take(&header_size, 4) || !take(&machine_uid, 4) || (header_size != 32)) {
+                return -1;
+            }
+        }
+
+        if (!mount_empty(drv, drive_media::rom, io_attrib_internal | io_attrib_write_protected)) {
+            return -1;
+        }
+
+        // Moving a vector keeps its buffer, so what was read so far still
+        // points into the package once it is held here.
+        packages_.push_back(std::move(package));
+
+        const std::uint8_t *cursor = at;
+        const std::uint8_t *stop = end;
+
+        int files = 0;
+
+        while (static_cast<std::size_t>(stop - cursor) >= 24) {
+            std::uint64_t attrib = 0;
+            std::uint64_t time = 0;
+            std::uint64_t path_len = 0;
+
+            std::memcpy(&attrib, cursor, 8);
+            std::memcpy(&time, cursor + 8, 8);
+            std::memcpy(&path_len, cursor + 16, 8);
+            cursor += 24;
+
+            if (static_cast<std::size_t>(stop - cursor) < path_len * 2 + 8) {
+                break;
+            }
+
+            std::u16string path(static_cast<std::size_t>(path_len), u'\0');
+            std::memcpy(path.data(), cursor, path_len * 2);
+            cursor += path_len * 2;
+
+            std::uint64_t data_size = 0;
+            std::memcpy(&data_size, cursor, 8);
+            cursor += 8;
+
+            if (static_cast<std::uint64_t>(stop - cursor) < data_size) {
+                break;
+            }
+
+            // "Z:\..." with the drive dropped and the rest lowercased: what the
+            // installer writes beside the ROM, so the same names come back.
+            const std::string relative = (path.size() > 3)
+                ? lowered(eka2l1::common::ucs2_to_utf8(path.substr(3)))
+                : std::string();
+
+            char letter = '\0';
+            std::vector<std::string> parts;
+            split_path(std::string("z:\\") + relative, letter, parts);
+
+            if (!parts.empty()) {
+                memory_node *node = &roots_[static_cast<int>(drv)];
+
+                for (std::size_t i = 0; i < parts.size(); i++) {
+                    memory_node &child = node->children[parts[i]];
+
+                    if (child.name.empty()) {
+                        child.name = parts[i];
+                    }
+
+                    child.is_dir = (i + 1 < parts.size());
+                    node = &child;
+                }
+
+                node->fixed = cursor;
+                node->fixed_size = static_cast<std::size_t>(data_size);
+                files++;
+            }
+
+            cursor += data_size;
+        }
+
+        return files;
+    }
+
+    bool memory_file_system::read_whole(const std::string &path, std::string &out) {
+        memory_node *node = resolve(path);
+
+        if (!node || node->is_dir) {
+            return false;
+        }
+
+        const std::uint8_t *from = node->fixed ? node->fixed : node->bytes.data();
+        const std::size_t size = node->fixed ? node->fixed_size : node->bytes.size();
+
+        out.assign(reinterpret_cast<const char *>(from), size);
+        return true;
+    }
+
+    std::vector<std::string> memory_file_system::list_names(const std::string &path) {
+        std::vector<std::string> names;
+        memory_node *node = resolve(path);
+
+        if (node && node->is_dir) {
+            for (const auto &child : node->children) {
+                names.push_back(child.second.name);
+            }
+        }
+
+        return names;
+    }
+
     std::size_t memory_file_system::entry_count() const {
         std::size_t total = 0;
 
@@ -640,6 +787,10 @@ namespace chimera {
         // Emptying the file for the second one destroys what the caller was
         // about to read - an installer streaming a package into place reads
         // its own source through such a handle, and got nothing.
+        if (node->fixed && (mode & (WRITE_MODE | APPEND_MODE))) {
+            return nullptr;
+        }
+
         if ((mode & WRITE_MODE) && !(mode & READ_MODE) && !(mode & APPEND_MODE)) {
             node->bytes.clear();
         }
@@ -681,7 +832,7 @@ namespace chimera {
         eka2l1::entry_info info;
 
         info.type = node->is_dir ? eka2l1::io_component_type::dir : eka2l1::io_component_type::file;
-        info.size = node->is_dir ? 0 : node->bytes.size();
+        info.size = node->is_dir ? 0 : (node->fixed ? node->fixed_size : node->bytes.size());
         info.full_path = utf8;
         info.name = eka2l1::filename(utf8);
         info.last_write = 0;
@@ -712,7 +863,23 @@ namespace chimera {
             return false;
         }
 
-        return parent->children.erase(lowered(leaf)) != 0;
+        auto found = parent->children.find(lowered(leaf));
+
+        if (found == parent->children.end()) {
+            return false;
+        }
+
+        // A directory goes only when it is empty, as RmDir and the host's own
+        // remove() have it. An installer's integrity service tidies up by
+        // removing each directory on the way back to the root and counts on
+        // the ones still holding something to refuse: taking the whole tree
+        // took C:\sys\bin with it, and every program installed there.
+        if (found->second.is_dir && !found->second.children.empty()) {
+            return false;
+        }
+
+        parent->children.erase(found);
+        return true;
     }
 
     bool memory_file_system::create_directory(const std::u16string &path) {

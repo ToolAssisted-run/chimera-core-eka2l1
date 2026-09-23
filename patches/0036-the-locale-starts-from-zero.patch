@@ -1,0 +1,15 @@
+--- a/src/emu/services/src/init.cpp
++++ b/src/emu/services/src/init.cpp
+@@ -125,7 +125,11 @@
+ 
+ namespace eka2l1::epoc {
+     epoc::locale get_locale_info() {
+-        epoc::locale locale;
++        // Every field this does not set is zero, not whatever the host's stack
++        // held: the language downgrade path is read from here, and a machine
++        // that looked for its resource files in a different language every
++        // run could not be replayed.
++        epoc::locale locale{};
+ 
+         // TODO: Move to common
+ #if EKA2L1_PLATFORM(WIN32)

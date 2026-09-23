@@ -1,0 +1,156 @@
+--- a/src/emu/system/include/system/software.h
++++ b/src/emu/system/include/system/software.h
+@@ -21,7 +21,9 @@
+ 
+ #include <common/types.h>
+ #include <loader/rom.h>
++#include <functional>
+ #include <string>
++#include <vector>
+ 
+ namespace eka2l1::loader {
+     epocver determine_rpkg_symbian_version(const std::string &extracted_path);
+@@ -44,4 +46,20 @@
+      */
+     bool determine_device_from_rom(loader::rom &romf, common::ro_stream *stream, std::string &manufacturer,
+         std::string &firmcode, std::string &model, epocver &ver);
++
++    /**
++     * \brief Which device a phone is, from the files of a drive Z that has no host folder.
++     *
++     * The same answers, in the same order, as detection on an unpacked folder: the
++     * version from platform.txt or else the series60v*.sis names in system\install;
++     * the product from product.txt, or else sw.txt (or langsw.txt) and model.txt.
++     * For an embedder whose drive Z is served from memory (an RPKG), which hands
++     * over each file's bytes and each directory's names.
++     *
++     * @param read Reads one file, by path relative to Z:\ ("resource\versions\sw.txt").
++     * @param list The names in one directory, by path relative to Z:\.
++     */
++    bool determine_device_from_drive_files(const std::function<bool(const std::string &, std::string &)> &read,
++        const std::function<std::vector<std::string>(const std::string &)> &list,
++        std::string &manufacturer, std::string &firmcode, std::string &model, epocver &ver);
+ }
+\ No newline at end of file
+--- a/src/emu/system/src/software.cpp
++++ b/src/emu/system/src/software.cpp
+@@ -448,6 +448,119 @@
+         return found;
+     }
+ 
++    bool determine_device_from_drive_files(const std::function<bool(const std::string &, std::string &)> &read,
++        const std::function<std::vector<std::string>(const std::string &)> &list,
++        std::string &manufacturer, std::string &firmcode, std::string &model, epocver &ver) {
++        // The version: platform.txt, or else the newest series60v*.sis.
++        bool version_found = false;
++        std::string platform_txt;
++
++        if (read("resource\\versions\\platform.txt", platform_txt)) {
++            common::ini_file platform_ini;
++
++            if (platform_ini.load_from_memory(platform_txt) == 0) {
++                auto major_node = platform_ini.find("SymbianOSMajorVersion");
++                auto minor_node = platform_ini.find("SymbianOSMinorVersion");
++
++                if (major_node && minor_node) {
++                    const int major = major_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
++                    const int minor = minor_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_as_native<std::uint8_t>();
++
++                    if (std::optional<epocver> mapped = get_epocver_through_platform_version(major, minor)) {
++                        ver = mapped.value();
++                        version_found = true;
++                    }
++                }
++            }
++        }
++
++        if (!version_found) {
++            for (const std::string &name_raw : list("system\\install")) {
++                const std::string name = common::lowercase_string(name_raw);
++
++                if (name.compare(0, 9, "series60v") != 0) {
++                    continue;
++                }
++
++                auto version_strings = common::pystr(name).split('.');
++
++                if (version_strings.size() < 2) {
++                    continue;
++                }
++
++                const int major = version_strings[0].substr(9, std::string::npos).as_int<int>();
++                const int minor = version_strings[1].as_int<int>();
++                const std::optional<epocver> discovered = get_epocver_through_sis_name_version(major, minor);
++
++                if (discovered && (!version_found || (discovered.value() > ver))) {
++                    ver = discovered.value();
++                    version_found = true;
++                }
++            }
++        }
++
++        if (!version_found) {
++            LOG_WARN(SYSTEM, "Drive Z does not say which Symbian it is; assuming the default");
++        }
++
++        // The product: product.txt, or else sw.txt and model.txt.
++        std::string product_txt;
++
++        if (read("resource\\versions\\product.txt", product_txt)) {
++            common::ini_file product_ini;
++
++            if (product_ini.load_from_memory(product_txt, false) == 0) {
++                auto manufacturer_node = product_ini.find("Manufacturer");
++                auto product_node = product_ini.find("Product");
++                auto model_node = product_ini.find("Model");
++
++                if (manufacturer_node && product_node && model_node) {
++                    manufacturer = manufacturer_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++                    firmcode = product_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++                    model = model_node->get_as<common::ini_pair>()->get<common::ini_value>(0)->get_value();
++
++                    return true;
++                }
++            }
++        }
++
++        std::string folder = "resource\\versions\\";
++        std::string sw_txt;
++
++        if (!read(folder + "sw.txt", sw_txt) && !read(folder + "langsw.txt", sw_txt)) {
++            folder = "system\\versions\\";
++
++            if (!read(folder + "sw.txt", sw_txt) && !read(folder + "langsw.txt", sw_txt)) {
++                return false;
++            }
++        }
++
++        common::dynamic_ifile sw_file(sw_txt, true);
++        std::string line_buffer;
++
++        sw_file.getline(line_buffer);
++
++        auto sw_infos = common::pystr(line_buffer).split("\\n");
++
++        if (sw_infos.size() < 3) {
++            return false;
++        }
++
++        firmcode = sw_infos[2].strip_reserverd().std_str();
++        manufacturer = (sw_infos.size() >= 4) ? sw_infos[3].strip_reserverd().std_str() : "Unknown";
++
++        std::string model_txt;
++
++        if (read(folder + "model.txt", model_txt)) {
++            common::dynamic_ifile model_file(model_txt, true);
++            model_file.getline(model);
++        } else {
++            model = sw_infos[0].std_str();
++        }
++
++        return true;
++    }
++
+     bool determine_device_from_rom(loader::rom &romf, common::ro_stream *stream, std::string &manufacturer,
+         std::string &firmcode, std::string &model, epocver &ver) {
+         if (!determine_symbian_version_from_rom(romf, stream, ver)) {

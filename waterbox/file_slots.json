@@ -7,6 +7,7 @@
       "min": 1,
       "max": 1,
       "formats": [
+        "n-gage",
         "blz",
         "rar",
         "zip",
@@ -14,7 +15,7 @@
         "sis",
         "sisx"
       ],
-      "help": "An N-Gage game. A card image (.blz) is unpacked into the machine by the BLZ installer, which the wizard then asks for as firmware. A card dump (.rar, .zip, .7z holding the card's System\\\\Apps tree) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto its C drive. Either way what it writes lives in the machine's own memory, so it is part of every savestate and every movie made from this project."
+      "help": "An N-Gage game. An N-Gage 2.0 game (.n-gage) is installed by the N-Gage application, which the wizard then asks for as firmware together with the phone's RPKG. A card image (.blz) is unpacked into the machine by the BLZ installer, which the wizard then asks for as firmware. A card dump (.rar, .zip, .7z holding the card's System\\\\Apps tree) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto its C drive. Either way what it writes lives in the machine's own memory, so it is part of every savestate and every movie made from this project."
     }
   ]
 }

@@ -21,6 +21,8 @@ namespace eka2l1 {
 }
 
 namespace chimera {
+    class memory_file_system;
+
 
     /* Known 12-bit values into known colours: the check chimera#130 needed
      * and the gate did not have. */
@@ -153,6 +155,14 @@ namespace chimera {
         // came up, never finished, or unpacked nothing.
         bool install_blz(const std::string &blz_path, const std::string &installer_path);
 
+        // An N-Gage 2.0 game (.n-gage): the file goes where the N-Gage
+        // application looks for new games, E:\n-gage\, and the application
+        // itself is installed from its package (and any patch after it). The
+        // game is then installed by the application, as it is on a phone,
+        // the first time it runs. Returns the application to start - its
+        // "Games" entry - or 0 when the installer or the file was refused.
+        std::uint32_t install_ngage(const std::string &game_path, const std::vector<std::string> &launcher_paths);
+
         // Installs a Symbian package into the machine, on drive C. The path
         // is a file the host mounted; what it writes goes into the machine's
         // own filesystem. Returns the emulator's own result code, 0 for
@@ -163,6 +173,15 @@ namespace chimera {
         // The machine then has one device, and its ROM is that file wherever
         // it happens to be. False when the ROM says nothing recognisable.
         bool add_device_from_rom(const std::string &rom_path);
+
+        // The same for an EKA2 phone, whose ROM keeps most of drive Z - and the
+        // files that say which phone it is - in a second image, the RPKG. That
+        // becomes a read-only drive Z of its own, the device is read from it,
+        // and set_device() puts it BEHIND the ROM's filesystem: what the ROM
+        // image holds is served from the ROM, as it is when the emulator unpacks
+        // an RPKG beside it. Empty `rpkg_path`, or a ROM that needs none, is the
+        // plain ROM path above. `error` says why it failed.
+        bool add_device_from_rom(const std::string &rom_path, const std::string &rpkg_path, std::string &error);
 
         // How many devices the storage holds, and whether one could be set.
         std::size_t device_count() const;
@@ -239,6 +258,10 @@ namespace chimera {
         std::uint32_t cached_page_ = 0xFFFFFFFF;
         std::uint8_t *cached_host_ = nullptr;
         std::unique_ptr<eka2l1::system> sys_;
+
+        // Drive Z out of the phone's RPKG, when it has one; registered with the
+        // machine's filesystems once the ROM's own is (see set_device).
+        std::shared_ptr<memory_file_system> rpkg_drive_;
         std::shared_ptr<eka2l1::drivers::graphics_driver> gdriver_;
         std::shared_ptr<audio_sink> adriver_;
 

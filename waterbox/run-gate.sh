@@ -507,5 +507,79 @@ else
 	fi
 fi
 
+# ---- an EKA2 phone and an N-Gage 2.0 game ---------------------------------
+# A Symbian 9 phone is a ROM and an RPKG (the rest of its drive Z), and an
+# N-Gage 2.0 game is installed by the N-Gage application, which is firmware
+# too - all of it the user's (chimera#133). With the four of them in
+# tests/roms-local/ngage2/ - SYM.ROM, SYM.RPKG, ngage.sis and a game .n-gage -
+# the machine installs the application, starts it, lets it install the game,
+# and Start Game is pressed on it 200 frames from the end.
+#
+# What is held: the sandbox is the same machine twice; a state saved half way
+# and loaded in another process finishes as the whole run does; and the native
+# reference draws the same picture. Not held, and said so rather than hidden:
+# native and sandbox differ by a few instructions from the fifth frame on, a
+# difference nobody has traced yet (docs/PLAN.md).
+ng2="$root/tests/roms-local/ngage2"
+ng2game="$(ls "$ng2"/*.n-gage 2>/dev/null | head -1)"
+
+if [ ! -f "$ng2/SYM.ROM" ] || [ ! -f "$ng2/SYM.RPKG" ] || [ ! -f "$ng2/ngage.sis" ] || [ -z "$ng2game" ]; then
+	echo "SKIP ngage2: no tests/roms-local/ngage2/{SYM.ROM,SYM.RPKG,ngage.sis,*.n-gage} (all the user's to supply)"
+elif [ ! -x "$rw" ] || [ ! -f "$core" ]; then
+	echo "SKIP ngage2: core.wbx not built"
+else
+	ng2work="$work/ngage2"
+	rm -rf "$ng2work"
+	mkdir -p "$ng2work"
+	# the same names and the same storage path the core sees in the sandbox:
+	# what the emulator is handed reaches the machine in more places than one
+	ln -s "$ng2/SYM.ROM" "$ng2work/sym.rom"
+	ln -s "$ng2/SYM.RPKG" "$ng2work/sym.rpkg"
+	ln -s "$ng2/ngage.sis" "$ng2work/ngage.sis"
+	ln -s "$ng2game" "$ng2work/$(basename "$ng2game")"
+	ng2digest='^(instructions|screen|bus body):'
+	ng2args="--rom $ng2/SYM.ROM --rpkg $ng2/SYM.RPKG --ngage-launcher $ng2/ngage.sis"
+
+	timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 4000 --press 5 > "$ng2work/a.txt" 2>&1 &
+	timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 4000 --press 5 > "$ng2work/b.txt" 2>&1 &
+	(cd "$ng2work" && timeout 3600 "$rn" --data data --rom-only sym.rom --rpkg sym.rpkg --gpu \
+		--ngage "$(basename "$ng2game")" --ngage-launcher ngage.sis --frames 4000 --press-at 3800:5 > nat.txt 2>&1)
+	wait
+
+	boxa="$(grep -E "$ng2digest" "$ng2work/a.txt" | sort)"
+	boxb="$(grep -E "$ng2digest" "$ng2work/b.txt" | sort)"
+	nats="$(grep -E '^screen:' "$ng2work/nat.txt")"
+	boxs="$(echo "$boxa" | grep '^screen:')"
+
+	if [ -z "$boxa" ]; then
+		echo "FAIL ngage2 (the sandbox produced nothing)"; tail -5 "$ng2work/a.txt"; fail=$((fail + 1))
+	elif echo "$boxs" | grep -q " lit 0$"; then
+		echo "FAIL ngage2 (the sandbox drew nothing)"; fail=$((fail + 1))
+	elif [ "$boxa" != "$boxb" ]; then
+		echo "FAIL ngage2 determinism (the sandbox ran two different machines)"
+		echo "$boxa"; echo "$boxb"; fail=$((fail + 1))
+	elif [ "$nats" != "$boxs" ]; then
+		echo "FAIL ngage2 picture (native vs sandbox)"; echo "$nats"; echo "$boxs"; fail=$((fail + 1))
+	else
+		echo "PASS ngage2: $(basename "$ng2game") installed by the N-Gage application and started, twice the same machine, the native picture ($boxs)"
+		pass=$((pass + 1))
+
+		ng2st="$ng2work/half.state"
+		half="$(timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 2000 --state-out "$ng2st" 2>&1 | grep -E '^state out:')"
+		rest="$(timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 2000 --press 5 --state-in "$ng2st" 2>&1 | grep -E '^(instructions|screen):' | sort)"
+		whole="$(echo "$boxa" | grep -E '^(instructions|screen):')"
+
+		if [ -z "$half" ]; then
+			echo "FAIL ngage2 session (nothing was written)"; fail=$((fail + 1))
+		elif [ "$rest" != "$whole" ]; then
+			echo "FAIL ngage2 session (a state loaded in another process runs differently)"
+			echo "$whole"; echo "$rest"; fail=$((fail + 1))
+		else
+			echo "PASS ngage2 session: 2000 frames saved, another process ran the other 2000 ($half)"
+			pass=$((pass + 1))
+		fi
+	fi
+fi
+
 echo "totals: $pass pass, $fail fail"
 [ "$fail" -eq 0 ]

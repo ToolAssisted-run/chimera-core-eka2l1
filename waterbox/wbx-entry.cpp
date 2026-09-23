@@ -83,6 +83,14 @@ namespace {
     // a .blz.
     constexpr const char *BLZ_INSTALLER = "blzinstapp.sis";
 
+    // An EKA2 phone's ROM keeps most of drive Z in a second image, dumped as
+    // an RPKG. Firmware beside the ROM, asked for only when the ROM needs it.
+    constexpr const char *RPKG_NAME = "sym.rpkg";
+
+    // And, for an N-Gage 2.0 game (.n-gage), the N-Gage application that
+    // installs and runs one: a Symbian package, firmware too.
+    constexpr const char *NGAGE_LAUNCHER = "ngage.sis";
+
     int g_installed = -1;
 
     bool ends_with(const char *name, const char *suffix) {
@@ -153,7 +161,30 @@ ECL_EXPORT int Init(void) {
     eka2l1::file_system_inst as_instance = g_drives;
     g_machine->sys()->get_io_system()->add_filesystem(as_instance);
 
-    if (g_machine->add_device_from_rom(ROM_NAME)) {
+    std::string rpkg;
+
+    if (std::FILE *probe = std::fopen(RPKG_NAME, "rb")) {
+        std::fclose(probe);
+        rpkg = RPKG_NAME;
+    }
+
+    std::string device_error;
+    bool have_rom = false;
+
+    if (std::FILE *probe = std::fopen(ROM_NAME, "rb")) {
+        std::fclose(probe);
+        have_rom = true;
+    }
+
+    // No ROM at all is an empty machine, which is how the equivalence gate
+    // runs one; a ROM that cannot be made into a device is an error the user
+    // can act on - above all an EKA2 phone's ROM without its RPKG.
+    if (have_rom && !g_machine->add_device_from_rom(ROM_NAME, rpkg, device_error)) {
+        std::snprintf(g_loadError, sizeof g_loadError, "%s", device_error.c_str());
+        return 0;
+    }
+
+    if (have_rom) {
         // Writable drives for whatever the machine puts on them. They are
         // empty, they are the machine's, and they travel in its savestates.
         g_drives->mount_empty(drive_c, drive_media::physical, io_attrib_internal);
@@ -192,11 +223,29 @@ ECL_EXPORT int Init(void) {
             // application from the phone's afterwards.
             g_machine->remember_apps();
 
-            // A card image the machine cannot read for itself, unpacked by the
-            // Symbian application that can; a game card - an archive holding a
+            // An N-Gage 2.0 game, which the N-Gage application installs; a card
+            // image the machine cannot read for itself, unpacked by the Symbian
+            // application that can; a game card - an archive holding a
             // System\Apps tree; or a Symbian package. In that order, because
-            // only the first is told apart by its name.
-            if (ends_with(game, ".blz")) {
+            // only the first two are told apart by their names.
+            std::uint32_t ngage_app = 0;
+
+            if (ends_with(game, ".n-gage")) {
+                // Where the N-Gage application looks for new games, and the
+                // application itself; it installs the game the first time it
+                // runs, as it does on a phone.
+                const std::uint32_t ngage = g_machine->install_ngage(game, { NGAGE_LAUNCHER });
+
+                if (ngage == 0) {
+                    std::snprintf(g_loadError, sizeof g_loadError,
+                        "the machine could not take this .n-gage - the N-Gage application firmware "
+                        "did not install, or the game could not be put on the memory card");
+                    return 0;
+                }
+
+                ngage_app = ngage;
+                g_installed = 0;
+            } else if (ends_with(game, ".blz")) {
                 if (!g_machine->install_blz(game, BLZ_INSTALLER)) {
                     std::snprintf(g_loadError, sizeof g_loadError,
                         "the machine could not unpack this .blz - the BLZ installer firmware "
@@ -224,7 +273,11 @@ ECL_EXPORT int Init(void) {
             // And it starts. A phone with nothing running shows its menu, and
             // a project that brought a game means the game: the frontend has
             // no launcher to offer and the machine should not need one.
-            g_launched = g_machine->launch_installed_app();
+            if (ngage_app != 0) {
+                g_launched = g_machine->launch_app(ngage_app) ? ngage_app : 0;
+            } else {
+                g_launched = g_machine->launch_installed_app();
+            }
         }
 
         g_device = true;

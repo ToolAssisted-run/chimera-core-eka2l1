@@ -111,6 +111,9 @@ int main(int argc, char **argv) {
     std::string verify_spec;
     std::string blz_path;
     std::string blz_installer;
+    std::string rpkg_path;
+    std::string ngage_path;
+    std::vector<std::string> ngage_launcher;
     int press_at = -1;
 
     // Scripted keys: <frame>:<button> pairs, held for twenty frames each.
@@ -151,6 +154,13 @@ int main(int argc, char **argv) {
             card_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--install") == 0) && has_value) {
             install_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--ngage") == 0) && has_value) {
+            ngage_path = argv[++i];
+        } else if ((std::strcmp(argv[i], "--ngage-launcher") == 0) && has_value) {
+            // the N-Gage application's package, then any patch: repeat in order
+            ngage_launcher.push_back(argv[++i]);
+        } else if ((std::strcmp(argv[i], "--rpkg") == 0) && has_value) {
+            rpkg_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--rom-only") == 0) && has_value) {
             rom_only_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--cpu") == 0) && has_value) {
@@ -231,11 +241,6 @@ int main(int argc, char **argv) {
     // the user's to supply.
     machine.startup();
 
-    // The machine gets somewhere to put its sound, exactly as the core gives
-    // it one: with the media server alive, whether there is an audio driver
-    // changes what the machine does.
-    machine.start_audio();
-
     if (gpu) {
         char err[256] = { 0 };
 
@@ -253,12 +258,21 @@ int main(int argc, char **argv) {
         machine.start_null_graphics();
     }
 
+    // The machine gets somewhere to put its sound, exactly as the core gives
+    // it one, and at the same point - after the graphics, as the core starts
+    // them: with the media server alive, whether there is an audio driver
+    // changes what the machine does, and the order changes which objects the
+    // machine's kernel numbers first.
+    machine.start_audio();
+
     if (drives) {
         eka2l1::file_system_inst as_instance = drives;
         machine.sys()->get_io_system()->add_filesystem(as_instance);
 
-        if (!machine.add_device_from_rom(rom_only_path)) {
-            std::fprintf(stderr, "%s does not say which device it is\n", rom_only_path.c_str());
+        std::string device_error;
+
+        if (!machine.add_device_from_rom(rom_only_path, rpkg_path, device_error)) {
+            std::fprintf(stderr, "%s: %s\n", rom_only_path.c_str(), device_error.c_str());
             return 1;
         }
 
@@ -335,6 +349,16 @@ int main(int argc, char **argv) {
         // The same path the core takes: the installer application, driven, and
         // whatever it unpacks.
         std::printf("blz: %s\n", machine.install_blz(blz_path, blz_installer) ? "unpacked" : "refused");
+    }
+
+    std::uint32_t ngage_uid = 0;
+
+    if (!ngage_path.empty()) {
+        // The same path the core takes: the game where the application looks,
+        // the application installed, and the application started.
+        machine.remember_apps();
+        ngage_uid = machine.install_ngage(ngage_path, ngage_launcher);
+        std::printf("ngage: %s\n", ngage_uid ? "installed" : "refused");
     }
 
     if (!card_path.empty()) {
@@ -499,7 +523,9 @@ int main(int argc, char **argv) {
 
     // The project's own application starts by itself, exactly as it does in
     // the core: a machine that was given a game runs the game.
-    if (!card_path.empty() || !install_path.empty() || !blz_path.empty()) {
+    if (ngage_uid != 0) {
+        std::printf("launched: 0x%08x %s\n", ngage_uid, machine.launch_app(ngage_uid) ? "started" : "refused");
+    } else if (!card_path.empty() || !install_path.empty() || !blz_path.empty()) {
         const std::uint32_t launched = machine.launch_installed_app();
 
         if (launched != 0) {
@@ -932,6 +958,12 @@ int main(int argc, char **argv) {
     }
 
     std::printf("teardown: ok\n");
+
+    // Everything above is the report, and it has to reach whoever reads it
+    // before the machine is taken apart: an EKA2 phone's kernel still crashes
+    // on the way down (a property subscription cancelled against a thread
+    // already gone), and a redirected stdout that is not flushed dies with it.
+    std::fflush(stdout);
 
     return 0;
 }

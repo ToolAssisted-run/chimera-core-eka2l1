@@ -1,0 +1,32 @@
+--- a/src/emu/services/src/drm/rights/db.cpp
++++ b/src/emu/services/src/drm/rights/db.cpp
+@@ -205,6 +205,12 @@ namespace eka2l1::epoc::drm {
+     }
+ 
+     void rights_database::flush() {
++        // Closing and reopening is how this writes itself out; an in-memory
++        // database has nowhere to be written, and closing it throws it away.
++        if (db_path_ == u":memory:") {
++            return;
++        }
++
+         reset();
+ 
+         // Reopen the database. Previous reset will save the database to disk
+--- a/src/emu/services/src/drm/rights/rights.cpp
++++ b/src/emu/services/src/drm/rights/rights.cpp
+@@ -58,8 +58,12 @@ namespace eka2l1 {
+ 
+         std::optional<std::u16string> path = io->get_raw_path(RIGHTS_DB_PATH);
+         if (!path.has_value()) {
+-            LOG_ERROR(SERVICE_DRMSYS, "No real path to rights DB available!");
+-            return;
++            // A drive with no host folder behind it - an embedder that keeps drive C
++            // in the machine's own memory - has nowhere for SQLite to put a file.
++            // The database is then SQLite's own in-memory one: empty at boot, as a
++            // new file is, and kept in the machine's memory with everything else.
++            LOG_INFO(SERVICE_DRMSYS, "No real path to rights DB available, keeping it in memory");
++            path = u":memory:";
+         }
+ 
+         database_ = std::make_unique<epoc::drm::rights_database>(path.value());

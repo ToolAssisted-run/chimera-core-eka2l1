@@ -1,4 +1,5 @@
 #include "machine.h"
+#include "memfs.h"
 #include "audio.h"
 #include "gl-context.h"
 #include "input.h"
@@ -7,6 +8,7 @@
 #include "embedded-files.h"
 
 #include <common/archive.h>
+#include <common/dynamicfile.h>
 #include <common/path.h>
 #include <config/app_settings.h>
 #include <config/config.h>
@@ -27,10 +29,14 @@
 #include <loader/rom.h>
 #include <system/devices.h>
 #include <system/software.h>
+#include <system/installation/rpkg.h>
 #include <system/epoc.h>
 #include <kernel/libmanager.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 namespace chimera {
     // EKA2L1 replaces a handful of ROM routines with its own: the screen driver
@@ -90,6 +96,15 @@ namespace chimera {
         // nanokernel timer starts.
         if (!options_.host_clock) {
             clock_.install();
+
+            // And the time zone is the machine's too. The emulator asks the
+            // host's C library for the phone's UTC offset and the zone's name,
+            // so a phone would keep the time zone of whatever computer ran it:
+            // a movie made in one country and played in another ran a
+            // different machine (chimera#133). The sandbox has no zone at all
+            // and answers UTC; so does the native reference, from here on.
+            setenv("TZ", "UTC", 1);
+            tzset();
         }
 
         conf_ = std::make_unique<eka2l1::config::state>();
@@ -452,8 +467,11 @@ namespace chimera {
         // Otherwise the picture is the window tree, and somebody has to
         // compose it. Nothing else will ask: the window server redraws on its
         // own schedule for a display that is watching, and here the only
-        // watcher is whoever called this.
-        winserv->get_anim_scheduler()->scan_for_redraw(gdriver_.get(), 0, true);
+        // watcher is whoever called this. Through redraw_now, which holds the
+        // scheduler's lock: scan_for_redraw without it returned still holding
+        // it, and the next redraw the machine asked for waited forever
+        // (chimera#133: the N-Gage 2.0 installer).
+        winserv->get_anim_scheduler()->redraw_now(gdriver_.get(), 0);
         gdriver_->pump();
 
         if (!scr->screen_texture) {
@@ -755,6 +773,38 @@ namespace chimera {
         return written;
     }
 
+    std::uint32_t machine::install_ngage(const std::string &game_path, const std::vector<std::string> &launcher_paths) {
+        // The application's own UID for its "Games" view: playserver.exe, which
+        // scans E:\n-gage\ and installs what it finds there.
+        constexpr std::uint32_t NGAGE_GAMES_UID = 0x20007B39;
+
+        std::string leaf = game_path;
+        const std::size_t slash = leaf.find_last_of("/\\");
+
+        if (slash != std::string::npos) {
+            leaf = leaf.substr(slash + 1);
+        }
+
+        sys_->get_io_system()->create_directories(u"E:\\n-gage\\");
+
+        if (!put_file("E:\\n-gage\\" + leaf, game_path)) {
+            return 0;
+        }
+
+        for (const std::string &package : launcher_paths) {
+            if (install_package(package) != 0) {
+                return 0;
+            }
+        }
+
+        // The installer wrote to drive C and the game is on E: the application
+        // list learns of either only when told.
+        sys_->get_io_system()->announce_drive(drive_c, eka2l1::drive_action_mount);
+        sys_->get_io_system()->announce_drive(drive_e, eka2l1::drive_action_mount);
+
+        return NGAGE_GAMES_UID;
+    }
+
     int machine::install_card(const std::string &archive_path) {
         std::vector<eka2l1::common::archive_entry_info> entries;
 
@@ -875,12 +925,140 @@ namespace chimera {
         return true;
     }
 
+    bool machine::add_device_from_rom(const std::string &rom_path, const std::string &rpkg_path, std::string &error) {
+        if (!eka2l1::loader::should_install_requires_additional_rpkg(rom_path)) {
+            if (!add_device_from_rom(rom_path)) {
+                error = "the ROM does not say which device it is";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (rpkg_path.empty()) {
+            error = "this ROM keeps drive Z in a second image, and the phone's RPKG was not given";
+            return false;
+        }
+
+        std::vector<std::uint8_t> package;
+
+        {
+            std::FILE *f = std::fopen(rpkg_path.c_str(), "rb");
+
+            if (!f) {
+                error = "the RPKG could not be opened";
+                return false;
+            }
+
+            std::fseek(f, 0, SEEK_END);
+            package.resize(static_cast<std::size_t>(std::ftell(f)));
+            std::fseek(f, 0, SEEK_SET);
+
+            const bool read = std::fread(package.data(), 1, package.size(), f) == package.size();
+            std::fclose(f);
+
+            if (!read) {
+                error = "the RPKG could not be read";
+                return false;
+            }
+        }
+
+        std::shared_ptr<memory_file_system> drives = std::make_shared<memory_file_system>();
+
+        if (drives->mount_rpkg(drive_z, std::move(package)) <= 0) {
+            error = "the RPKG is not one, or holds no files";
+            return false;
+        }
+
+        std::string manufacturer;
+        std::string firmcode;
+        std::string model;
+        epocver ver = epocver::epoc94;
+
+        const auto read = [&drives](const std::string &relative, std::string &out) {
+            return drives->read_whole("z:\\" + relative, out);
+        };
+
+        const auto list = [&drives](const std::string &relative) {
+            return drives->list_names("z:\\" + relative);
+        };
+
+        if (!eka2l1::loader::determine_device_from_drive_files(read, list, manufacturer, firmcode, model, ver)) {
+            error = "the RPKG does not say which device it is";
+            return false;
+        }
+
+        if (sys_->get_device_manager()->add_new_device(firmcode, model, manufacturer, ver, 0)
+            != eka2l1::add_device_none) {
+            error = "the device was refused";
+            return false;
+        }
+
+        // The phone's languages. The device manager reads them from a host
+        // folder of drive Z, which this drive Z does not have, and falls back
+        // to English alone; read the same file from where it is, the same way.
+        std::string languages_txt;
+
+        if (drives->read_whole("z:\\resource\\bootdata\\languages.txt", languages_txt)) {
+            std::vector<int> languages;
+            int default_language = -1;
+
+            eka2l1::common::dynamic_ifile ifile(languages_txt, true);
+            ifile.set_ucs2(0);
+
+            std::string line;
+
+            while (ifile.getline(line)) {
+                if (line.empty() || (line[0] == '\0')) {
+                    break;
+                }
+
+                if ((line == "\r") || (line == "\n") || (line == "\r\n")) {
+                    continue;
+                }
+
+                const int code = std::atoi(line.c_str());
+
+                if (line.find_first_of(",d") != std::string::npos) {
+                    default_language = code;
+                }
+
+                languages.push_back(code);
+            }
+
+            if (!languages.empty()) {
+                eka2l1::device *added = sys_->get_device_manager()->get(firmcode);
+                added->languages = languages;
+                added->default_language_code = (default_language == -1) ? languages[0] : default_language;
+            }
+        }
+
+        drives->set_epoc_ver(ver);
+        rpkg_drive_ = drives;
+
+        sys_->set_rom_path(rom_path);
+
+        return true;
+    }
+
     std::size_t machine::device_count() const {
         return sys_->get_device_manager()->total();
     }
 
     bool machine::set_device(const std::size_t index) {
-        return sys_->set_device(static_cast<std::uint8_t>(index));
+        if (!sys_->set_device(static_cast<std::uint8_t>(index))) {
+            return false;
+        }
+
+        // The ROM's filesystem exists from here on, and was registered just
+        // now: the RPKG's drive Z goes after it, so a file the ROM image holds
+        // is the ROM's and not the RPKG's copy of it.
+        if (rpkg_drive_) {
+            eka2l1::file_system_inst as_instance = rpkg_drive_;
+            sys_->get_io_system()->add_filesystem(as_instance);
+        }
+
+        return true;
     }
 
     void machine::boot() {

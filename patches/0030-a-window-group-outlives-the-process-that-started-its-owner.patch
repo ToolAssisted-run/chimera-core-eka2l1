@@ -1,0 +1,49 @@
+--- a/src/emu/services/include/services/window/classes/wingroup.h
++++ b/src/emu/services/include/services/window/classes/wingroup.h
+@@ -44,6 +44,10 @@ namespace eka2l1::epoc {
+         std::size_t uid_owner_change_callback_handle;
+ 
+         kernel::process *uid_owner_change_process;
++        // The same process by its kernel id. It can die before this group does -
++        // an application started by another outlives its starter - and then the
++        // pointer above is freed memory; the id says whether it is still there.
++        kernel::uid uid_owner_change_process_id;
+         ws::uid screen_change_event_handle;
+ 
+         bool can_receive_focus() {
+--- a/src/emu/services/src/window/classes/wingroup.cpp
++++ b/src/emu/services/src/window/classes/wingroup.cpp
+@@ -18,6 +18,7 @@
+  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
++#include <kernel/kernel.h>
+ #include <services/window/classes/scrdvc.h>
+ #include <services/window/classes/wingroup.h>
+ #include <services/window/classes/winuser.h>
+@@ -90,6 +91,7 @@ namespace eka2l1::epoc {
+         : window(client, scr, parent, window_kind::group)
+         , uid_owner_change_callback_handle(0)
+         , uid_owner_change_process(nullptr)
++        , uid_owner_change_process_id(0)
+         , screen_change_event_handle(0) {
+         set_initial_state();
+ 
+@@ -107,11 +109,16 @@ namespace eka2l1::epoc {
+             window_group_process_uid_type_change_callback);
+ 
+         uid_owner_change_process = mama;
++        uid_owner_change_process_id = mama->unique_id();
+     }
+ 
+     window_group::~window_group() {
+         if (uid_owner_change_process) {
+-            uid_owner_change_process->unregister_uid_type_change_callback(uid_owner_change_callback_handle);
++            kernel_system *kern = client->get_ws().get_kernel_system();
++
++            if (kern->get_by_id<kernel::process>(uid_owner_change_process_id) == uid_owner_change_process) {
++                uid_owner_change_process->unregister_uid_type_change_callback(uid_owner_change_callback_handle);
++            }
+         }
+         
+         remove_from_sibling_list();

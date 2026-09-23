@@ -1,0 +1,17 @@
+--- a/src/emu/common/src/random.cpp
++++ b/src/emu/common/src/random.cpp
+@@ -26,8 +26,12 @@ namespace eka2l1 {
+     }
+ 
+     uint32_t random_range(uint32_t beg, uint32_t end) {
+-        std::mt19937 rng;
+-        rng.seed(std::random_device()());
++        // One generator with a fixed seed, not a fresh one seeded from the host's
++        // entropy on every call. What it picks - a temporary file's name, a
++        // Bluetooth address - is the machine's, and a machine that picks
++        // differently each run cannot be replayed. Its state is ordinary memory,
++        // so it goes wherever the rest of the emulator's does, savestates included.
++        static std::mt19937 rng(0x5EED0001u);
+         std::uniform_int_distribution<std::mt19937::result_type> dist(beg, end);
+ 
+         return dist(rng);

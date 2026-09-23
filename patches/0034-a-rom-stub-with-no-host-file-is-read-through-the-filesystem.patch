@@ -1,0 +1,90 @@
+--- a/src/emu/package/include/package/manager.h
++++ b/src/emu/package/include/package/manager.h
+@@ -78,6 +78,10 @@
+             void traverse_tree_and_add_packages(loader::sis_registry_tree &tree);
+             void install_sis_stubs();
+ 
++            // A stub the drive has no host file for: its bytes, read through the
++            // filesystem that holds it, interpreted the same way a stub on disk is.
++            package::installation_result install_stub_from_memory(std::vector<std::uint8_t> &bytes, const drive_number drive);
++
+             // Delete "<drive>:\private\<sid>\" on every writable drive: the data
+             // directory that belongs to an executable which has just been removed.
+             void remove_private_directories(const epoc::uid sid);
+--- a/src/emu/package/src/manager.cpp
++++ b/src/emu/package/src/manager.cpp
+@@ -30,6 +30,8 @@
+ #include <config/config.h>
+ 
+ #include <package/manager.h>
++#include <cstring>
++#include <common/buffer.h>
+ #include <package/sis_script_interpreter.h>
+ #include <package/sis_v1_installer.h>
+ #include <vfs/vfs.h>
+@@ -84,8 +86,18 @@
+                     if (stub_dir_iterator) {
+                         while (std::optional<entry_info> stub_file_info = stub_dir_iterator->get_next_entry()) {
+                             auto stub_file_real_path = sys->get_raw_path(common::utf8_to_ucs2(stub_file_info->full_path));
+-                            if (stub_file_real_path.has_value()) {
++                            if (stub_file_real_path.has_value() && common::exists(common::ucs2_to_utf8(stub_file_real_path.value()))) {
+                                 install_package(stub_file_real_path.value(), drv, nullptr, nullptr, true, true);
++                            } else if (symfile stub_file = sys->open_file(common::utf8_to_ucs2(stub_file_info->full_path), READ_MODE | BIN_MODE)) {
++                                // No host file behind this drive (an embedder serving it from
++                                // memory): the stub is still there, read through the filesystem.
++                                std::vector<std::uint8_t> bytes(static_cast<std::size_t>(stub_file->size()));
++                                const std::size_t got = stub_file->read_file(bytes.data(), 1, static_cast<std::uint32_t>(bytes.size()));
++                                stub_file->close();
++
++                                if (got == bytes.size()) {
++                                    install_stub_from_memory(bytes, drv);
++                                }
+                             }
+                         }
+                     }
+@@ -805,6 +817,45 @@
+ 
+             LOG_TRACE(PACKAGE, "Installation done!");
+             return package::installation_result_success;
++        }
++
++        package::installation_result packages::install_stub_from_memory(std::vector<std::uint8_t> &bytes, const drive_number drive) {
++            if (bytes.size() < 4) {
++                return package::installation_result_invalid;
++            }
++
++            std::uint32_t uid1 = 0;
++            std::memcpy(&uid1, bytes.data(), 4);
++
++            // Only the new format's stub - a bare controller - is read this way; an
++            // old-format package goes through a path-only installer.
++            if (uid1 != static_cast<std::uint32_t>(loader::sis_field_type::SISController)) {
++                return package::installation_result_invalid;
++            }
++
++            auto parse_stream = std::make_shared<common::ro_buf_stream>(bytes.data(), bytes.size());
++            loader::sis_parser parser(parse_stream);
++
++            loader::sis_contents res;
++            res.controller = parser.parse_controller();
++
++            common::ro_buf_stream stream(bytes.data(), bytes.size());
++            loader::ss_interpreter interpreter(reinterpret_cast<common::ro_stream *>(&stream), sys, this, &res.controller, &res.data, drive);
++
++            if (var_resolver) {
++                interpreter.var_resolver = var_resolver;
++            }
++
++            std::unique_ptr<loader::sis_registry_tree> new_infos = interpreter.interpret(nullptr, nullptr);
++
++            if (!new_infos) {
++                return package::installation_result_aborted;
++            }
++
++            traverse_tree_and_add_packages(*new_infos);
++
++            LOG_TRACE(PACKAGE, "Installation done!");
++            return package::installation_result_success;
+         }
+ 
+         bool packages::controller(const uid app_uid, const std::uint32_t package_index, const std::uint32_t controller_offset,

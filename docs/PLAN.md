@@ -684,3 +684,85 @@ The user's four new cards, on this ROM:
   filesystem with none of this core involved, so it is an upstream
   compatibility gap rather than anything here. Not TLS: the EKA1 executor's
   set_tls (0x34) is called and every later lookup finds its slot.
+
+## An EKA2 phone and N-Gage 2.0 (chimera#133, 2026-09-23)
+
+An N-Gage 2.0 game is not an N-Gage game in the old sense. It runs on a Symbian
+9 phone - a Nokia 5320 XpressMusic is the tested one - inside the N-Gage
+application, which installs it from an `.n-gage` file (a MIME multipart: a
+retailer note and two SIS packages) placed in `E:\n-gage\`. So a project brings
+three things as firmware and one as the game:
+
+- `SYM.ROM` and `SYM.RPKG`. An EKA2 phone keeps only its kernel and core
+  programs in the ROM image; the rest of drive Z is a second image (ROFS),
+  dumped as an RPKG. The RPKG is uncompressed - an index of files and their
+  bytes - so it is read once and SERVED as drive Z from memory, each file
+  pointing into the buffer, read-only, and registered BEHIND the ROM's own
+  filesystem (set_device), which is the order the emulator's desktop install
+  gives the ROM and the unpacked folder. Nothing is unpacked into the machine.
+  The buffer IS in every savestate, though (a FIFA 09 state is 135 MB against
+  a 121 MB RPKG): it is ordinary heap, and nothing yet tells the sandbox that
+  it never changes. Open. Which phone it is comes from the RPKG's version files, with the
+  same fallbacks as the desktop install (patch 0031); a v1 RPKG carries no
+  machine UID and neither install passes one.
+- `ngage.sis`, the N-Gage 2.0 application (v1.40.1557, pinned by SHA1). The
+  "patch" SISX that circulates with it is NOT needed: FIFA 09 reaches the same
+  picture with and without it.
+- The `.n-gage`. `install_ngage` puts it in `E:\n-gage\`, installs the
+  application and starts its Games view (playserver, 0x20007B39); the
+  application installs the game itself, as a phone does, and shows it in My
+  Games with Start Game on the left soft key. That press is the movie's.
+
+**What drive Z from memory broke, one at a time, each found by the machine:**
+
+1. The window server's redraw from outside the scheduler returned holding the
+   scheduler's lock, and the next redraw waited forever (0029, and
+   `redraw_now` in the core). Latent since the compositor went in; the N-Gage
+   application was the first thing to draw through the window server here.
+2. A window group kept a raw pointer to the process that started its owner;
+   the installer exits first, and the group then unregistered from freed
+   memory (0030, by kernel id).
+3. The central repository read `.txt` repositories by host path only (0032),
+   the DRM rights database was an SQLite file by host path only (0033, kept in
+   memory - and `flush()`, which closes and reopens, must not throw an
+   in-memory database away), and the ROM's SIS stubs were registered by host
+   path only (0034). Without the stubs the game's dependency on the S60 3.2
+   platform could not be met, and the application said "Game not found".
+4. **memfs deleted a directory with everything in it.** The phone's own
+   integrity service tidies up by removing each directory on the way back to
+   the root and counts on RmDir refusing a directory that is not empty. It took
+   `C:\sys` - and every installed program - with it.
+5. The languages a device reads from `languages.txt` came from a host path;
+   the machine now reads the same file from drive Z (English was the fallback).
+
+**Determinism, and what it took.** The phone ran a different machine every run.
+Four sources, each proven by bisecting instruction counts between two runs:
+
+- `eka2l1::random_range` seeded a new generator from `std::random_device` on
+  every call (temp file names, a Bluetooth address) - one fixed-seed generator
+  now (0035).
+- The locale was built on the stack uninitialised: its language downgrade path
+  was host stack garbage, so the machine looked for its resource files in a
+  different language every run (0036).
+- Host structs handed to the guest by the emulated services (a volume's info,
+  a directory entry, a phone's network, an app's info - a dozen sites found by
+  scanning descriptor writes for the host's stack canary) carried their unset
+  fields and padding. `-ftrivial-auto-var-init=zero` on the whole build closes
+  every such site, including those not found.
+- The MIDI engine's clock was the host's wall clock (0037).
+
+With those, two sandbox runs of FIFA 09 are byte-identical (instructions and
+the address space), and so are two native runs. The core also pins the
+machine's time zone to UTC: the emulator reads the phone's UTC offset and zone
+name from the host's C library, so a movie would have run a different machine
+in another country. The sandbox had no zone and answered UTC already.
+
+**Open: native and sandbox are not the same machine on an EKA2 phone.** They
+draw the same picture, and each is deterministic, but they part by 17
+instructions at the fifth frame and never meet again. Ruled out: the file names
+the harness hands over, the start order of graphics and audio, the GL driver,
+the compiler (a GCC 13 native build parts the same way), the C library's
+case folding. Also found and not yet removed from the native reference: the
+length of its storage path reaches the machine (the gate runs it with the
+sandbox's `data`). The gate holds determinism, a savestate across processes and
+the picture, and not the instruction count, until this is traced.

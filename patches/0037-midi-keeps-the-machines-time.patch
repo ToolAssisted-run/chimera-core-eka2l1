@@ -1,0 +1,31 @@
+--- a/src/emu/drivers/src/audio/backend/bae_platimpl.cpp
++++ b/src/emu/drivers/src/audio/backend/bae_platimpl.cpp
+@@ -29,6 +29,7 @@
+ #include <drivers/audio/audio.h>
+ 
+ #include <common/container.h>
++#include <common/time.h>
+ #include <common/fileutils.h>
+ #include <common/platform.h>
+ #include <common/cvt.h>
+@@ -146,15 +147,15 @@ unsigned long BAE_Microseconds() {
+     static std::uint64_t last_recorded = 0;
+     static bool first_recorded = false;
+ 
++    // The machine's clock, not the host's: MIDI that advances by wall time
++    // plays a different amount of music - and runs a different machine -
++    // depending on how fast the host happened to be.
+     if (!first_recorded) {
+-        last_recorded = std::chrono::duration_cast<std::chrono::microseconds>(
+-           std::chrono::system_clock::now().time_since_epoch()).count();
+-
++        last_recorded = eka2l1::common::get_current_utc_time_in_microseconds_since_epoch();
+         first_recorded = true;
+     }
+ 
+-    std::uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
+-           std::chrono::system_clock::now().time_since_epoch()).count();
++    const std::uint64_t now = eka2l1::common::get_current_utc_time_in_microseconds_since_epoch();
+ 
+     return static_cast<unsigned long>(now - last_recorded);
+ }

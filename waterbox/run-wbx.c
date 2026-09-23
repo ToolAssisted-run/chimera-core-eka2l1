@@ -2,7 +2,7 @@
  * miniBox host and reports what the machine did in run-native's exact format,
  * so the sandboxed build can be diffed against the native reference.
  *
- * usage: run-wbx <core.wbx> [--frames N] [--rom SYM.ROM] [--run 0xUID]
+ * usage: run-wbx <core.wbx> [--frames N] [--rom SYM.ROM] [--rpkg SYM.RPKG] [--run 0xUID]
  *                [--rerecord] [--state-out FILE] [--state-in FILE] [--press N]
  *
  * --rerecord saves and reloads the machine before every single frame. If any
@@ -107,7 +107,7 @@ static uintptr_t proc(mb_host *h, const char *n)
 
 int main(int argc, char **argv)
 {
-	const char *core = NULL, *rom = NULL, *game = NULL, *installer = NULL;
+	const char *core = NULL, *rom = NULL, *game = NULL, *installer = NULL, *rpkg = NULL, *ngage_launcher = NULL;
 	long frames = 60, timer_us = 0;
 	uint32_t run_uid = 0;
 	int rerecord = 0;
@@ -120,6 +120,8 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
 		else if (!strcmp(argv[i], "--game") && i + 1 < argc) game = argv[++i];
 		else if (!strcmp(argv[i], "--blz-installer") && i + 1 < argc) installer = argv[++i];
+		else if (!strcmp(argv[i], "--rpkg") && i + 1 < argc) rpkg = argv[++i];
+		else if (!strcmp(argv[i], "--ngage-launcher") && i + 1 < argc) ngage_launcher = argv[++i];
 		else if (!strcmp(argv[i], "--timer-us") && i + 1 < argc) timer_us = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--run") && i + 1 < argc) run_uid = (uint32_t)strtoul(argv[++i], NULL, 16);
 		else if (!strcmp(argv[i], "--rerecord")) rerecord = 1;
@@ -157,6 +159,16 @@ int main(int argc, char **argv)
 		if (r.error_message[0]) { fprintf(stderr, "mount rom: %s\n", r.error_message); return 1; }
 	}
 
+	if (rpkg) {
+		/* an EKA2 phone's drive Z, beside its ROM */
+		wbx_mount_file_path(h, "sym.rpkg", rpkg, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount rpkg: %s\n", r.error_message); return 1; }
+	}
+	if (ngage_launcher) {
+		/* the N-Gage application, which installs a .n-gage */
+		wbx_mount_file_path(h, "ngage.sis", ngage_launcher, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount ngage launcher: %s\n", r.error_message); return 1; }
+	}
 	if (installer) {
 		/* the other firmware: the application that unpacks a .blz */
 		wbx_mount_file_path(h, "blzinstapp.sis", installer, &r);

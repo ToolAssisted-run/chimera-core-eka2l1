@@ -1,0 +1,70 @@
+--- a/src/emu/services/include/services/centralrepo/centralrepo.h
++++ b/src/emu/services/include/services/centralrepo/centralrepo.h
+@@ -39,6 +39,7 @@ namespace eka2l1 {
+ 	 * \returns False if IO error or invalid centrep configs.
+ 	*/
+     bool parse_new_centrep_ini(const std::string &path, central_repo &repo);
++    bool parse_new_centrep_ini_bytes(const std::string &contents, central_repo &repo);
+ 
+     class central_repo_server;
+ 
+--- a/src/emu/services/src/centralrepo/centralrepo.cpp
++++ b/src/emu/services/src/centralrepo/centralrepo.cpp
+@@ -603,9 +603,19 @@ namespace eka2l1 {
+         }
+     }
+ 
++    static bool parse_new_centrep_ini_from(common::dynamic_ifile &creini, const std::string &path, central_repo &repo);
++
+     bool parse_new_centrep_ini(const std::string &path, central_repo &repo) {
+         common::dynamic_ifile creini(path);
++        return parse_new_centrep_ini_from(creini, path, repo);
++    }
++
++    bool parse_new_centrep_ini_bytes(const std::string &contents, central_repo &repo) {
++        common::dynamic_ifile creini(contents, true);
++        return parse_new_centrep_ini_from(creini, "(a repository read from memory)", repo);
++    }
+ 
++    static bool parse_new_centrep_ini_from(common::dynamic_ifile &creini, const std::string &path, central_repo &repo) {
+         if (creini.fail()) {
+             return false;
+         }
+@@ -1002,13 +1012,33 @@ namespace eka2l1 {
+ 
+                     // Try to load the INI
+                     auto path = io->get_raw_path(repo_folder + repoini);
++                    bool parsed = false;
++
++                    if (path) {
++                        repo->uid = key;
++                        parsed = parse_new_centrep_ini(common::ucs2_to_utf8(*path), *repo);
++                    }
++
++                    if (!parsed) {
++                        // A drive with no host folder behind it - an embedder that
++                        // serves drive Z from memory - still has the file, and the
++                        // host path another filesystem offered for it leads nowhere:
++                        // read it through the filesystem that holds it.
++                        symfile inifile = io->open_file(repo_folder + repoini, READ_MODE | BIN_MODE);
++
++                        if (!inifile) {
++                            continue;
++                        }
++
++                        std::string contents(static_cast<std::size_t>(inifile->size()), '\0');
++                        inifile->read_file(contents.data(), 1, static_cast<std::uint32_t>(contents.size()));
++                        inifile->close();
+ 
+-                    if (!path) {
+-                        continue;
++                        repo->uid = key;
++                        parsed = parse_new_centrep_ini_bytes(contents, *repo);
+                     }
+ 
+-                    repo->uid = key;
+-                    if (parse_new_centrep_ini(common::ucs2_to_utf8(*path), *repo)) {
++                    if (parsed) {
+                         repo->reside_place = avail_drives[0];
+                         repo->access_count = 1;
+                         avail_drives.pop_back();

@@ -1,0 +1,33 @@
+--- a/src/emu/services/include/services/window/scheduler.h
++++ b/src/emu/services/include/services/window/scheduler.h
+@@ -120,6 +120,16 @@ namespace eka2l1::epoc {
+ 
+         void scan_for_redraw(drivers::graphics_driver *driver, const int screen_number, const bool force_redraw);
+ 
++        /**
++         * \brief Redraw a screen now if it has an update scheduled, from outside the scheduler.
++         *
++         * scan_for_redraw() expects its caller to hold the scheduler's lock: it lets
++         * go of it around an immediate redraw and takes it again before returning.
++         * Called without the lock, it returns holding it, and the next schedule()
++         * waits on it forever. This takes the lock first.
++         */
++        void redraw_now(drivers::graphics_driver *driver, const int screen_number);
++
+         /**
+          * \brief Schedule a screen redraw.
+          * \param scr    The screen to be scheduled.
+--- a/src/emu/services/src/window/scheduler.cpp
++++ b/src/emu/services/src/window/scheduler.cpp
+@@ -200,6 +200,11 @@ namespace eka2l1::epoc {
+         }
+     }
+ 
++    void animation_scheduler::redraw_now(drivers::graphics_driver *driver, const int screen_number) {
++        const std::lock_guard<std::mutex> guard(lock_);
++        scan_for_redraw(driver, screen_number, true);
++    }
++
+     void animation_scheduler::invoke_due_animation(drivers::graphics_driver *driver, const int screen_number) {
+         if (!driver) {
+             return;
