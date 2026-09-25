@@ -69,6 +69,17 @@ namespace chimera {
         // Which ARM implementation runs the machine. "dyncom" is the
         // interpreter and the reference; "dynarmic" is the recompiler.
         std::string cpu_backend = "dyncom";
+
+        // Whether the window server copies what it composes back into the
+        // screen memory an application can read: "preferred" (upstream's
+        // choice: on for an EKA1 phone, off for EKA2), "on" or "off". A game
+        // that reads its own screen needs it on (chimera#143).
+        std::string screen_buffer_sync = "preferred";
+
+        // OpenGL ES 1 through the emulator's own driver (true, the default),
+        // or through the phone's own software rasteriser, which is ARM code
+        // like any other and therefore runs in the machine (chimera#143).
+        bool hw_gles1 = true;
     };
 
     // The emulator, its clock, and the loop that drives both. Everything a core

@@ -29,6 +29,7 @@
 #include <vector>
 
 #include <emulibc.h>
+#include <waterbox_settings.h>
 #include <waterbox_slots.h>
 #include <waterboxcore.h>
 
@@ -132,6 +133,15 @@ ECL_EXPORT int Init(void) {
 
     options.in_memory_drives = true;
     options.sample_rate = SAMPLE_RATE;
+
+    // The project's settings: only the ones that are part of the machine and
+    // deterministic (chimera#143). Absent, they are upstream's defaults.
+    wbx_settings_use_file();
+    char value[32];
+    if (wbx_setting_str("screenBufferSync", value, sizeof value) > 0)
+        options.screen_buffer_sync = value;
+    if (wbx_setting_str("openglEs", value, sizeof value) > 0)
+        options.hw_gles1 = std::strcmp(value, "software") != 0;
 
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();

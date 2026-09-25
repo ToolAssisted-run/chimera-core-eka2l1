@@ -116,6 +116,9 @@ namespace chimera {
         // waiting), and neither the bitmap compressor nor the app scan may run
         // on a thread of its own.
         conf_->cpu_backend = options_.cpu_backend;
+        conf_->screen_buffer_sync_string = options_.screen_buffer_sync;
+        conf_->screen_buffer_sync = eka2l1::config::get_screen_buffer_sync_option_from_string(options_.screen_buffer_sync);
+        conf_->enable_hw_gles1 = options_.hw_gles1;
         conf_->cpu_load_save = false;
         conf_->fbs_enable_compression_queue = false;
         conf_->single_thread_app_scan = true;

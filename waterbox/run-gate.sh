@@ -578,6 +578,38 @@ else
 			echo "PASS ngage2 session: 2000 frames saved, another process ran the other 2000 ($half)"
 			pass=$((pass + 1))
 		fi
+
+		# ---- the settings a project may change (chimera#143) --------------------
+		# Only settings that are part of the machine and deterministic are
+		# offered, and each is held to that here: set, it must change the
+		# machine (a setting that reaches nothing would only mislead), two runs
+		# must agree, and the native reference given the same value must draw
+		# the same picture.
+		defbus="$(echo "$boxa" | grep '^bus body:')"
+		for pair in "screenBufferSync:on:--screen-buffer-sync on" "openglEs:software:--opengl-es software"; do
+			key="${pair%%:*}"; rest2="${pair#*:}"; val="${rest2%%:*}"; natflag="${rest2#*:}"
+			json="{\"$key\":\"$val\"}"
+			timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 4000 --press 5 --settings "$json" > "$ng2work/$key.a.txt" 2>&1 &
+			timeout 3600 "$rw" "$core" $ng2args --game "$ng2game" --frames 4000 --press 5 --settings "$json" > "$ng2work/$key.b.txt" 2>&1 &
+			(cd "$ng2work" && timeout 3600 "$rn" --data "data-$key" --rom-only sym.rom --rpkg sym.rpkg --gpu $natflag \
+				--ngage "$(basename "$ng2game")" --ngage-launcher ngage.sis --frames 4000 --press-at 3800:5 > "nat-$key.txt" 2>&1)
+			wait
+			sa="$(grep -E "$ng2digest" "$ng2work/$key.a.txt" | sort)"
+			sb="$(grep -E "$ng2digest" "$ng2work/$key.b.txt" | sort)"
+			sn="$(grep -E '^screen:' "$ng2work/nat-$key.txt")"
+			if [ -z "$sa" ]; then
+				echo "FAIL setting $key=$val (the sandbox produced nothing)"; fail=$((fail + 1))
+			elif [ "$sa" != "$sb" ]; then
+				echo "FAIL setting $key=$val (two runs disagree)"; echo "$sa"; echo "$sb"; fail=$((fail + 1))
+			elif [ "$(echo "$sa" | grep '^bus body:')" = "$defbus" ]; then
+				echo "FAIL setting $key=$val (it changed nothing in the machine)"; fail=$((fail + 1))
+			elif [ "$sn" != "$(echo "$sa" | grep '^screen:')" ]; then
+				echo "FAIL setting $key=$val (native vs sandbox)"; echo "$sn"; echo "$sa"; fail=$((fail + 1))
+			else
+				echo "PASS setting $key=$val: reaches the machine, twice the same, native picture ($(echo "$sa" | grep '^screen:'))"
+				pass=$((pass + 1))
+			fi
+		done
 	fi
 fi
 

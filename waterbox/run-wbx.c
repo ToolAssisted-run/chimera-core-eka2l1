@@ -114,6 +114,7 @@ int main(int argc, char **argv)
 	const char *state_out = NULL, *state_in = NULL;
 	long press = -1;
 	const char *bus_out = NULL;
+	const char *settings_json = NULL;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = strtol(argv[++i], NULL, 10);
@@ -129,6 +130,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--state-in") && i + 1 < argc) state_in = argv[++i];
 		else if (!strcmp(argv[i], "--press") && i + 1 < argc) press = strtol(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--bus-out") && i + 1 < argc) bus_out = argv[++i];
+		else if (!strcmp(argv[i], "--settings") && i + 1 < argc) settings_json = argv[++i];
 		else if (argv[i][0] != '-' && !core) core = argv[i];
 		else { fprintf(stderr, "unknown argument: %s\n", argv[i]); return 2; }
 	}
@@ -193,6 +195,15 @@ int main(int argc, char **argv)
 		freader_mem slots_reader = { (const uint8_t *)slots_json, strlen(slots_json), 0 };
 		wbx_mount_file(h, "slots", mem_read, (uintptr_t)&slots_reader, 0, &r);
 		if (r.error_message[0]) { fprintf(stderr, "mount slots: %s\n", r.error_message); return 1; }
+	}
+
+	/* the project's settings, as a project hands them over: a mounted JSON */
+	freader_mem settings_reader = { 0 };
+	if (settings_json) {
+		settings_reader.p = (const uint8_t *)settings_json;
+		settings_reader.len = strlen(settings_json);
+		wbx_mount_file(h, "settings", mem_read, (uintptr_t)&settings_reader, 0, &r);
+		if (r.error_message[0]) { fprintf(stderr, "mount settings: %s\n", r.error_message); return 1; }
 	}
 
 	intfn Init = (intfn)proc(h, "Init");

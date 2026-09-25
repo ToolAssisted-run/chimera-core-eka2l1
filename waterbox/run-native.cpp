@@ -165,6 +165,10 @@ int main(int argc, char **argv) {
             rom_only_path = argv[++i];
         } else if ((std::strcmp(argv[i], "--cpu") == 0) && has_value) {
             options.cpu_backend = argv[++i];
+        } else if ((std::strcmp(argv[i], "--screen-buffer-sync") == 0) && has_value) {
+            options.screen_buffer_sync = argv[++i];
+        } else if ((std::strcmp(argv[i], "--opengl-es") == 0) && has_value) {
+            options.hw_gles1 = std::strcmp(argv[++i], "software") != 0;
         } else if (std::strcmp(argv[i], "--gpu") == 0) {
             gpu = true;
         } else if ((std::strcmp(argv[i], "--verify") == 0) && has_value) {
