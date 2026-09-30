@@ -121,6 +121,33 @@ extern "C" {
 int chimera_osmesa_start(int width, int height);
 void *chimera_osmesa_proc(const char *name);
 
+// "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD", UTC, to seconds since 1970. By hand
+// rather than through timegm: the date is the project's, and nothing of the
+// host (its time zone, its libc) may have a say in it.
+static bool parse_clock_start(const char *text, std::uint64_t &seconds) {
+    int y = 0, mo = 0, d = 0, h = 0, mi = 0, s = 0, used = 0;
+    const bool with_time = std::sscanf(text, "%4d-%2d-%2d %2d:%2d:%2d%n", &y, &mo, &d, &h, &mi, &s, &used) == 6 && text[used] == '\0';
+    if (!with_time) {
+        h = mi = s = used = 0;
+        if (std::sscanf(text, "%4d-%2d-%2d%n", &y, &mo, &d, &used) != 3 || text[used] != '\0') return false;
+    }
+    static const int days_in[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    const bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    if (y < 1980 || y > 2099 || mo < 1 || mo > 12 || d < 1 || d > days_in[mo - 1] + (mo == 2 && leap ? 1 : 0)
+        || h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59) {
+        return false;
+    }
+    // days from 1970-01-01 (Howard Hinnant's days_from_civil)
+    const int yy = y - (mo <= 2 ? 1 : 0);
+    const int era = yy / 400;
+    const unsigned yoe = static_cast<unsigned>(yy - era * 400);
+    const unsigned doy = (153u * static_cast<unsigned>(mo + (mo > 2 ? -3 : 9)) + 2u) / 5u + static_cast<unsigned>(d) - 1u;
+    const unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+    const long long days = static_cast<long long>(era) * 146097LL + static_cast<long long>(doe) - 719468LL;
+    seconds = static_cast<std::uint64_t>(days * 86400LL + h * 3600LL + mi * 60LL + s);
+    return true;
+}
+
 ECL_EXPORT const char *GetLoadError(void) {
     return g_loadError;
 }
@@ -142,6 +169,19 @@ ECL_EXPORT int Init(void) {
         options.screen_buffer_sync = value;
     if (wbx_setting_str("openglEs", value, sizeof value) > 0)
         options.hw_gles1 = std::strcmp(value, "software") != 0;
+    // The date the machine's clock starts at (chimera#139): the RTC is the
+    // machine's own, counted in instructions from here, so a game that seeds
+    // its random numbers from the time sees this date on every run and every
+    // replay. A project can move it; it is part of the machine.
+    if (wbx_setting_str("clockStart", value, sizeof value) > 0) {
+        std::uint64_t seconds = 0;
+        if (!parse_clock_start(value, seconds)) {
+            std::snprintf(g_loadError, sizeof g_loadError,
+                "the Clock start setting is '%s'; it is a date and time in UTC, YYYY-MM-DD HH:MM:SS (or YYYY-MM-DD), from 1980 to 2099", value);
+            return 0;
+        }
+        options.epoch_us = seconds * 1000000ull;
+    }
 
     g_machine = std::make_unique<chimera::machine>(options);
     g_machine->startup();
@@ -455,6 +495,12 @@ ECL_EXPORT int GetVsyncDenominator(void) {
 // machine and none from the host.
 ECL_EXPORT std::uint64_t GetVirtualUs(void) {
     return g_inited ? g_machine->clock().elapsed_us() : 0;
+}
+
+// The date the machine believes it is, in microseconds since 1970 (UTC): the
+// Clock start setting plus the time it has run.
+ECL_EXPORT std::uint64_t GetClockNowUs(void) {
+    return g_inited ? g_machine->clock().now_us() : 0;
 }
 
 ECL_EXPORT std::uint64_t GetInstructions(void) {

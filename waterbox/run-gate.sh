@@ -138,6 +138,24 @@ else
 		echo "PASS sandbox: native == sandbox ($(echo "$box" | grep 'timer fired'))"
 		pass=$((pass + 1))
 	fi
+
+	# the Clock start setting (chimera#139): the phone's clock starts at the
+	# project's date - 2010-01-01 00:00:00 UTC without one - and runs on the
+	# machine's own time from there, so the date moves and nothing else does.
+	# Dates computed here independently (seconds since 1970, UTC).
+	clock() { timeout 600 "$rw" "$core" --frames 60 --timer-us 1000 ${1:+--settings "$1"} 2>&1 | grep -E '^(virtual us|clock now us):|^Init failed' | tr '\n' ' '; }
+	c0="$(clock)"
+	c1="$(clock '{"clockStart":"2004-10-07 12:34:56"}')"
+	cbad="$(clock '{"clockStart":"2004-13-07"}')"
+	v0="$(echo "$c0" | sed -n 's/.*virtual us: \([0-9]*\).*/\1/p')"; n0="$(echo "$c0" | sed -n 's/.*clock now us: \([0-9]*\).*/\1/p')"
+	v1="$(echo "$c1" | sed -n 's/.*virtual us: \([0-9]*\).*/\1/p')"; n1="$(echo "$c1" | sed -n 's/.*clock now us: \([0-9]*\).*/\1/p')"
+	if [ -n "$v0" ] && [ "$v0" = "$v1" ] && [ "$n0" = "$((1262304000000000 + v0))" ] && [ "$n1" = "$((1097152496000000 + v1))" ] &&
+	   echo "$cbad" | grep -q "Init failed: the Clock start setting is '2004-13-07'"; then
+		echo "PASS clock-start: 2010-01-01 by default, 2004-10-07 12:34:56 when the project says so, the same $v0 us run either way; a bad date refused"
+		pass=$((pass + 1))
+	else
+		echo "FAIL clock-start: [$c0] [$c1] [$cbad]"; fail=$((fail + 1))
+	fi
 fi
 
 # ---- a real device, and real Symbian code ----------------------------------

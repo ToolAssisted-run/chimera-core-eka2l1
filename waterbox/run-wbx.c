@@ -217,6 +217,7 @@ int main(int argc, char **argv)
 	printf("init ok\n"); fflush(stdout);
 	framefn FrameAdvance = (framefn)proc(h, "FrameAdvance");
 	u64fn GetVirtualUs = (u64fn)proc(h, "GetVirtualUs");
+	u64fn GetClockNowUs = (u64fn)proc(h, "GetClockNowUs");
 	u64fn GetInstructions = (u64fn)proc(h, "GetInstructions");
 	u64fn GetTimerFired = (u64fn)proc(h, "GetTimerFired");
 	u64fn GetTimerLastUs = (u64fn)proc(h, "GetTimerLastUs");
@@ -396,6 +397,7 @@ int main(int argc, char **argv)
 	printf("drive written: %" PRIu64 " bytes\n", GetDriveWrittenBytes());
 	printf("frames: %ld at 60 fps\n", frames);
 	printf("virtual us: %" PRIu64 "\n", GetVirtualUs());
+	printf("clock now us: %" PRIu64 "\n", GetClockNowUs());
 	printf("instructions: %" PRIu64 "\n", GetInstructions());
 	printf("timer fired: %" PRIu64 " every 1000 us\n", GetTimerFired());
 	printf("timer last: %" PRIu64 " us\n", GetTimerLastUs());
