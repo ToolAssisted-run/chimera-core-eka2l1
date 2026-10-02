@@ -1,4 +1,7 @@
 #include "machine.h"
+
+#include <cstring>
+
 #include "memfs.h"
 #include "audio.h"
 #include "gl-context.h"
@@ -598,6 +601,21 @@ namespace chimera {
     std::uint8_t machine::peek_user(const std::uint32_t addr) {
         const std::uint8_t *at = resolve_user(addr);
         return at ? *at : 0;
+    }
+
+    void machine::read_user(std::uint32_t addr, std::uint8_t *out, std::uint32_t len) {
+        while (len) {
+            const std::uint32_t inPage = 0x1000u - (addr & 0xFFFu);
+            const std::uint32_t n = len < inPage ? len : inPage;
+            if (const std::uint8_t *at = resolve_user(addr)) {
+                std::memcpy(out, at, n);
+            } else {
+                std::memset(out, 0, n);
+            }
+            addr += n;
+            out += n;
+            len -= n;
+        }
     }
 
     void machine::poke_user(const std::uint32_t addr, const std::uint8_t value) {

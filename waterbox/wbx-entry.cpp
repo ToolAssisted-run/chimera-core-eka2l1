@@ -474,6 +474,31 @@ ECL_EXPORT std::int32_t PeekBus(std::int32_t bus, std::int32_t addr) {
     return g_machine->peek_user(static_cast<std::uint32_t>(addr));
 }
 
+// A run of the bus at once (chimera engine.h, ce_session_bus_read): what
+// PeekBus would answer byte by byte, a page per lookup and one call for up to
+// 64 KiB. RAM Search reads the whole bus; a byte per call was 64 million
+// crossings into the sandbox, seconds of them (chimera#180). The buffer is
+// INVISIBLE: what a tool happened to read is no part of the machine.
+namespace {
+    ECL_INVISIBLE std::uint8_t g_busRun[65536];
+}
+
+ECL_EXPORT const std::uint8_t *ReadBus(std::int32_t bus, std::int64_t addr, std::int32_t len) {
+    if (len < 0) {
+        len = 0;
+    }
+    if (len > static_cast<std::int32_t>(sizeof(g_busRun))) {
+        len = static_cast<std::int32_t>(sizeof(g_busRun));
+    }
+    if (!g_inited || (bus != 0) || (addr < 0) || (addr + len > USER_BUS_SIZE)) {
+        std::memset(g_busRun, 0, static_cast<std::size_t>(len));
+        return g_busRun;
+    }
+
+    g_machine->read_user(static_cast<std::uint32_t>(addr), g_busRun, static_cast<std::uint32_t>(len));
+    return g_busRun;
+}
+
 ECL_EXPORT void PokeBus(std::int32_t bus, std::int32_t addr, std::int32_t value) {
     if (!g_inited || (bus != 0) || (addr < 0) || (addr >= USER_BUS_SIZE)) {
         return;

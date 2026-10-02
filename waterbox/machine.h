@@ -142,6 +142,8 @@ namespace chimera {
         // process it started, whichever thread happens to have run last.
         // Addresses nothing is mapped at read as zero and swallow writes.
         std::uint8_t peek_user(std::uint32_t addr);
+        // A run of the same address space, a page per lookup; unmapped pages read as zero.
+        void read_user(std::uint32_t addr, std::uint8_t *out, std::uint32_t len);
         void poke_user(std::uint32_t addr, std::uint8_t value);
 
         // Puts one host file into the machine's own filesystem, at the path
