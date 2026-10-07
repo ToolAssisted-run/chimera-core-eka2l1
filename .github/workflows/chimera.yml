@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # RECURSIVE. extern/eka2l1 has forty-five submodules of its own under
+          # RECURSIVE. extern/eka2l1 has forty submodules of its own under
           # src/external, and upstream's CMake add_subdirectory()s them by name:
           # a one-level checkout configures into two dozen "does not contain a
           # CMakeLists.txt file" errors before it reaches a compiler.

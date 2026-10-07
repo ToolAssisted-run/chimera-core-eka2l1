@@ -16,9 +16,11 @@ one phone ROM serves every game:
 
 | | |
 | --- | --- |
-| game (the project's file) | `.blz`, `.rar`, `.zip`, `.7z`, `.sis`, `.sisx` |
+| game (the project's file) | `.n-gage`, `.blz`, `.rar`, `.zip`, `.7z`, `.sis`, `.sisx` |
 | `sym.rom` (firmware, always) | a dump of the phone's own ROM - it says which device this is and carries drive Z |
 | `blzinstapp.sis` (firmware, `.blz` projects only) | the Symbian application that unpacks an N-Gage card image |
+| `sym.rpkg` (firmware, `.n-gage` projects only) | the rest of an EKA2 phone's drive Z, which its ROM image does not hold |
+| `ngage.sis` (firmware, `.n-gage` projects only) | the N-Gage 2.0 application, as the package that installs it |
 
 A card dump is copied onto the machine's memory card, a package is installed
 onto its C drive, and a `.blz` is unpacked by running BLZinstapp inside the
@@ -73,7 +75,7 @@ short operating guide for a coding agent.
 
     waterbox/run-gate.sh
 
-Nineteen legs. Upstream's own test suite; upstream's differential harness over
+Upstream's own test suite; upstream's differential harness over
 the interpreter this core runs on; the clock (the machine does not notice a
 stalled host, and the check for that has teeth); one thread; then, whenever the
 user's own ROM and games are in `tests/roms-local/`, the machine itself - the
