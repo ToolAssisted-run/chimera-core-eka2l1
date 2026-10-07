@@ -43,16 +43,31 @@ Symbian games draw in two ways and the core answers both:
   built by `waterbox/setup-mesa.sh`). softpipe is plain C with no JIT and no
   dispatch on host CPU features, so it draws the same picture everywhere.
 
+## Using it in Chimera
+
+Chimera ships no cores and downloads nothing. Download the `.chimeraCore`
+package from this repository's
+[Releases](https://github.com/ToolAssisted-run/chimera-core-eka2l1/releases)
+page, or build it, and put it in the `Cores` folder beside `Chimera.exe` (or
+the folder chosen in File > Core Manager > Change folder...). File > Core
+Manager lists the cores in that folder. The same package works on Linux and on
+Windows.
+
 ## Building
 
     waterbox/setup-mesa.sh          # the machine's own OpenGL (pinned, cached)
+    waterbox/setup-ffmpeg.sh        # the machine's audio decoders (without them the core is silent)
     waterbox/build-native.sh        # the reference: emulator + harness, no sandbox
     waterbox/build-guest.sh         # the emulator for the guest toolchain
     waterbox/build-core.sh          # links core.wbx
-    waterbox/build-package.sh       # all of the above -> <chimera>/build/Cores/eka2l1.chimeraCore
+    waterbox/build-package.sh       # Mesa, guest and core -> <chimera>/build/Cores/eka2l1.chimeraCore
 
 `waterbox/build-difftest.sh` builds upstream's own CPU differential harness, in
 its own tree, for the gate.
+
+The requirements, the miniBox toolchain these scripts need and every option
+are in [docs/BUILDING.md](docs/BUILDING.md). [AGENTS.md](AGENTS.md) is the
+short operating guide for a coding agent.
 
 ## The gate
 
