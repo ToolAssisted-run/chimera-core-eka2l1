@@ -1,5 +1,5 @@
 {
-  "_comment": "The core-declared file form for chimera's project wizard. A Symbian project is a GAME: the machine it runs on is firmware (the phone's ROM), because one ROM serves every game and a project should name the game it is about.",
+  "_comment": "This file lists the kinds of file a Symbian project can hold. Chimera's New Project window is built from it. A project is about a GAME. The phone it runs on is given as firmware (the phone's ROM), because one ROM serves every game.",
   "slots": [
     {
       "id": "game",
@@ -15,7 +15,7 @@
         "sis",
         "sisx"
       ],
-      "help": "An N-Gage game. An N-Gage 2.0 game (.n-gage) is installed by the N-Gage application, which the wizard then asks for as firmware together with the phone's RPKG. A card image (.blz) is unpacked into the machine by the BLZ installer, which the wizard then asks for as firmware. A card dump (.rar, .zip, .7z holding the card's System\\\\Apps tree) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto its C drive. Either way what it writes lives in the machine's own memory, so it is part of every savestate and every movie made from this project."
+      "help": "An N-Gage game, in one of four forms. An N-Gage 2.0 game (.n-gage) is installed by the N-Gage application, and the wizard then asks for that application and for the phone's RPKG as firmware. A card image (.blz) is unpacked by the BLZ installer, and the wizard then asks for that installer as firmware. A card dump (a .rar, .zip or .7z that holds the card's System\\Apps folders) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto drive C. In every case the installed game is in the machine's own memory, so it is part of every savestate and every movie made from this project."
     }
   ]
 }
