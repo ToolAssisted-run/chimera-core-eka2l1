@@ -6,11 +6,11 @@
   ],
   "AllTrollers": {
     "Symbian Keypad": {
-      "Up": "UpArrow",
-      "Down": "DownArrow",
-      "Left": "LeftArrow",
-      "Right": "RightArrow",
-      "Select": "Return",
+      "Up": "Up",
+      "Down": "Down",
+      "Left": "Left",
+      "Right": "Right",
+      "Select": "Enter",
       "Left Soft": "F1",
       "Right Soft": "F2",
       "Call": "F3",
@@ -25,7 +25,7 @@
       "7": "Number7",
       "8": "Number8",
       "9": "Number9",
-      "Star": "Multiply",
+      "Star": "KeypadMultiply",
       "Hash": "Number3"
     }
   }
