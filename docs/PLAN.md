@@ -772,10 +772,10 @@ the picture, and not the instruction count, until this is traced.
 The keypad's arrows were on UpArrow, DownArrow, LeftArrow and RightArrow,
 Select on Return and Star on Multiply; they are on Up, Down, Left, Right,
 Enter and KeypadMultiply. Chimera hands a key to the bindings under one name:
-the name its DistinctKeyNameOverrides gives it ("Number1", "Enter",
-"Backtick", "KeypadAdd") or else its DistinctKey name ("Up"); and unless told
+the name Chimera gives it ("Number1", "Enter",
+"Backtick", "KeypadAdd") or else its own name ("Up"); and unless told
 otherwise it reads the left and right Shift, Ctrl and Alt as one key each,
-"Shift", "Ctrl" and "Alt" (Input.cs, Config.MergeLAndRModifierKeys). A default
+"Shift", "Ctrl" and "Alt". A default
 binding to another name never fired, so those controls shipped unbound on the
 keyboard. Checked on a virtual display: with 1, Return, left Shift and Up held, Chimera
 reports Number1, Enter, Shift and Up. Left and right names stay beside the
