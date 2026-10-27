@@ -43,7 +43,7 @@ and on Windows.
 ```sh
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-  meson ninja-build build-essential cmake pkg-config python3 mono-complete \
+  meson ninja-build build-essential cmake pkg-config python3 \
   libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev \
   libsdl2-dev libwayland-dev \
   python3-mako bison flex
@@ -58,7 +58,7 @@ meson compile -C "$mb/build/meson-cpp"
 ```
 
 The submodule update must be recursive, or CMake fails at configure time. The
-contract tests also need Chimera's natives and .NET 8.0 (`docs/BUILDING.md`).
+contract tests also need Chimera built with its window (`docs/BUILDING.md`).
 
 ## Build
 
@@ -81,9 +81,9 @@ scripts fall back to `$HOME/chimera`.
 Chimera ships no cores and downloads nothing: a package is put in its `Cores`
 folder by hand. In a source checkout `build-package.sh -r <chimera>` already
 wrote it there, as `<chimera>/build/Cores/eka2l1.chimeraCore`. For a release
-bundle, copy the file into the `Cores` folder beside `Chimera.exe`, or into
-the folder chosen in File > Core Manager > Change folder... File > Core
-Manager lists the folder; Refresh List rescans it.
+bundle, copy the file into the `cores` folder beside Chimera's program, or into
+the folder chosen in Tools > Core Manager... > Change folder... Tools > Core
+Manager... lists the folder; Refresh List rescans it.
 
 A hand-built package is stamped `<commit>+local` (`-dirty` when the tree has
 changes) and is for testing. CI stamps the commit and publishes the `dev` and
@@ -93,8 +93,8 @@ changes) and is for testing. CI stamps the commit and publishes the `dev` and
 
 ```sh
 ./waterbox/run-gate.sh
-# also, with Chimera's natives built, when the package or its declarations changed:
-cd <chimera> && CHIMERA_CORES_DIR=<chimera>/build/Cores dotnet test source/gui/Chimera.Tests.Client.Common/Chimera.Tests.Client.Common.csproj -c Release --nologo --filter "FullyQualifiedName~InstalledCorePackagesTests|FullyQualifiedName~MnemonicUniquenessTests"
+# also, with Chimera built, when the package or its declarations changed:
+CHIMERA_CORES_DIR=<chimera>/build/Cores <chimera>/build/meson-linux/source/ui/test-packages
 ```
 
 `run-gate.sh` takes no options and ends with `totals: N pass, N fail`. There

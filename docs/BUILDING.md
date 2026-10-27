@@ -26,7 +26,7 @@ Commands are run from `<core>` unless a `cd` says otherwise.
 ```sh
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-  meson ninja-build build-essential cmake pkg-config python3 mono-complete \
+  meson ninja-build build-essential cmake pkg-config python3 \
   libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev \
   libsdl2-dev libwayland-dev \
   python3-mako bison flex
@@ -40,7 +40,6 @@ What the less obvious ones are for:
   guest build turns `EKA2L1_HOST_DEVICES` off and needs none of them.
 - `python3-mako bison flex` - this core's own Mesa is a meson build and
   generates its sources with them.
-- `mono-complete` and .NET - Chimera's contract tests.
 
 **Compilers.** The workflow pins no compiler version: it uses the runner's
 `gcc` and `g++`. `waterbox/guest-toolchain.cmake` takes `gcc-13` and `g++-13`
@@ -48,12 +47,9 @@ for the guest when they exist, and plain `gcc` and `g++` otherwise. The reason
 is in that file: GCC 14 makes an implicit function declaration an error, and
 upstream's libarchive has one against the guest's C library.
 
-**.NET SDK 8.0.** The workflow uses `actions/setup-dotnet@v4` with
-`dotnet-version: '8.0'`. Chimera's README gives the manual install:
-
-```sh
-curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
-```
+**Qt 6.12.** Chimera's window needs it, and so do Chimera's contract tests.
+Chimera's `tools/ci-chimera.sh` installs it (from Qt's own archives, with aqt)
+and builds Chimera; the workflow keeps it in `~/qt` between runs.
 
 This core has no Rust.
 
@@ -347,10 +343,10 @@ page, or builds it, and puts it in Chimera's `Cores` folder.
 - In a Chimera source checkout the cores folder is `<chimera>/build/Cores/`.
   `waterbox/build-package.sh -r <chimera>` writes the package straight there,
   so there is nothing more to do.
-- In a release bundle it is the `Cores` folder beside `Chimera.exe`, or another
-  folder chosen in File > Core Manager > Change folder... Copy
+- In a release bundle it is the `cores` folder beside Chimera's program, or another
+  folder chosen in Tools > Core Manager... > Change folder... Copy
   `eka2l1.chimeraCore` into it.
-- File > Core Manager lists what is in that folder. Refresh List rescans it.
+- Tools > Core Manager... lists what is in that folder. Refresh List rescans it.
 
 Published packages are at
 https://github.com/ToolAssisted-run/chimera-core-eka2l1/releases.
@@ -442,11 +438,10 @@ The last three run only after `ngage2` passes.
 This core's frontend check: Chimera's own tests against the package just
 built. It must be readable, built for an ABI this frontend runs, become a
 working factory, bind only buttons its controller declares, and stamp a
-version. They need Chimera's native libraries built (above), and no ROM.
+version. They need Chimera built with its window (above), and no ROM.
 
 ```sh
-cd <chimera>
-CHIMERA_CORES_DIR=<chimera>/build/Cores dotnet test source/gui/Chimera.Tests.Client.Common/Chimera.Tests.Client.Common.csproj -c Release --nologo --filter "FullyQualifiedName~InstalledCorePackagesTests|FullyQualifiedName~MnemonicUniquenessTests"
+CHIMERA_CORES_DIR=<chimera>/build/Cores <chimera>/build/meson-linux/source/ui/test-packages
 ```
 
 ## Files the core needs at run time
@@ -494,7 +489,7 @@ Symbian package (`.sis`, `.sisx`).
   `build/deps/` (or `MESA_TARBALL`) is not Mesa 24.0.9 with the pinned SHA256.
 - `ekatests not built` or `run-native not built` from the gate - run
   `./waterbox/build-native.sh`.
-- The contract tests fail to load a native library - Chimera's natives are not
+- The contract tests fail to load a native library - Chimera is not
   built. See "Build miniBox".
 - `extern/eka2l1 is not checked out` or `is partly patched` - see "The
   patches" above.
