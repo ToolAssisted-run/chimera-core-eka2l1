@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Mesin tidak dapat membuka .blz ini: firmware installer BLZ tidak berjalan, atau tidak membuka apa pun.",
+		"error.clock_start": "Pengaturan Waktu mulai jam adalah '%1'. Ini adalah tanggal dan waktu dalam UTC, YYYY-MM-DD HH:MM:SS (atau YYYY-MM-DD), dari 1980 sampai 2099.",
+		"error.device_refused": "Perangkat ditolak.",
+		"error.needs_rpkg": "ROM ini menyimpan drive Z di citra kedua, dan RPKG ponsel tidak ada di proyek.",
+		"error.ngage_not_installed": "Mesin tidak dapat menerima .n-gage ini: firmware aplikasi N-Gage tidak terpasang, atau game tidak dapat dimasukkan ke kartu memori.",
+		"error.rom_device_refused": "Perangkat di dalam ROM ditolak.",
+		"error.rom_no_device": "ROM tidak menyebutkan perangkatnya apa.",
+		"error.rpkg_empty": "RPKG itu bukan RPKG, atau tidak berisi berkas.",
+		"error.rpkg_no_device": "RPKG tidak menyebutkan perangkatnya apa.",
+		"error.rpkg_not_opened": "RPKG tidak dapat dibuka.",
+		"error.rpkg_not_read": "RPKG tidak dapat dibaca.",
+		"firmware.blzinstapp_sis": "Installer BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Aplikasi Symbian yang membuka citra kartu .blz N-Gage. .blz adalah berkas terkompresi yang tidak dapat dibaca ponsel dengan sendirinya. Aplikasi ini dipasang di dalam mesin dan membuka game ke kartu memori, dan game berjalan dari sana. Ini hanya diperlukan untuk proyek .blz.",
+		"firmware.ngage_sis": "Aplikasi N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "Aplikasi N-Gage 2.0, sebagai paket yang memasangnya (N-Gage INSTALLER v.1.40.1557). Ponsel tidak dapat menjalankan berkas .n-gage secara langsung. Aplikasi N-Gage memasang game seperti itu dari E:\\n-gage\\ saat pertama kali dijalankan. Paket ini dipasang di dalam mesin dan dijalankan, dan game lalu muncul di daftar My Games-nya, dengan Start Game di tombol lunak kiri. Ini hanya diperlukan untuk proyek .n-gage.",
+		"firmware.sym_rom": "ROM perangkat Symbian",
+		"firmware.sym_rom.about": "Salinan ROM ponsel. Ia menyebutkan perangkat apa ini (pembuat, model, kode firmware, dan versi Symbian), dan ia berisi drive Z ponsel. Bersama game, ia adalah seluruh mesin. Salinan dari ponsel Symbian mana pun diterima. Tidak ada berkas tertentu yang diwajibkan, karena salinan setiap model adalah berkas yang berbeda.",
+		"firmware.sym_rpkg": "RPKG perangkat Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Sisa drive Z dari ponsel Symbian 9. Ponsel seperti itu hanya menyimpan sistem intinya di citra ROM. Aplikasi, sumber daya, dan berkas yang menyebutkan ponsel apa itu berada di citra kedua, yang di-dump sebagai berkas RPKG di sebelah ROM. Core membacanya di tempatnya, sebagai drive Z, dan tidak membuka apa pun. Tidak ada berkas tertentu yang diwajibkan, karena salinan setiap model berbeda, tetapi harus RPKG yang menjadi milik ROM yang diberikan bersamanya. Ini diperlukan untuk game N-Gage 2.0, yang berjalan di ponsel seperti itu. Nokia 5320 XpressMusic adalah yang sudah diuji.",
+		"setting.clockstart": "Mulai jam (UTC)",
+		"setting.clockstart.about": "Tanggal dan waktu yang ditampilkan jam ponsel saat mesin mulai, dalam UTC. Tulis sebagai YYYY-MM-DD HH:MM:SS atau hanya YYYY-MM-DD, dari 1980 sampai 2099. Jam ini milik ponsel yang diemulasi. Ia mulai di sini pada setiap run dan berjalan mengikuti instruksi yang dijalankan ponsel, tidak pernah mengikuti waktu komputer Anda. Game yang mengambil angka acaknya dari waktu karena itu mendapat angka yang sama di setiap run. Tanggal yang berbeda mengubah apa yang dilakukan game seperti itu, jadi tanggal termasuk bagian dari mesin dan movie mencatatnya.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Cara grafis OpenGL ES 1 ponsel digambar. 'emulated' (standar EKA2L1, yang disebutnya 'GPU accelerated GLES1') menggantikan pustaka grafis ponsel dengan milik emulator. Yang itu menggambar dengan OpenGL perangkat lunak yang ada di dalam core ini, di dalam sandbox, sehingga hasilnya sama di setiap komputer. 'software' mempertahankan kode gambar milik ponsel sendiri, yang ditulis Nokia dan dijalankan seperti kode ponsel lainnya. Ini lebih lambat, dan persis seperti yang dijalankan ponsel, jadi layak dicoba saat 3D sebuah game tampak salah dengan 'emulated'. Dengan pilihan mana pun, movie diputar secara identik, dan ia mencatat pilihan mana yang dipakai saat dibuat.",
+		"setting.screenbuffersync": "Sinkronisasi buffer layar",
+		"setting.screenbuffersync.about": "Apakah gambar yang disusun sistem jendela ponsel juga disalin ke memori layar yang dapat dibaca aplikasi. 'preferred' adalah pilihan EKA2L1 sendiri. Ia menyala untuk ponsel yang lebih lama (N-Gage, Symbian 6 sampai 8) dan mati untuk yang lebih baru (Symbian 9 dan setelahnya, termasuk N-Gage 2.0). Game yang membaca layarnya sendiri, untuk menyimpan tangkapan layar atau menggambar di atas frame terakhir, memerlukannya menyala, dan tanpanya gambar mungkin tampil usang atau rusak. Semua hal lain berjalan lebih cepat saat ini mati. Salinan masuk ke memori ponsel, jadi pengaturan ini bagian dari mesin dan movie mencatatnya. Dua opsi EKA2L1 lain sengaja tidak disertakan. 'CPU emulation' di sini selalu interpreter, karena recompiler diukur lebih lambat di core ini. 'Real-time accuracy' hanya memengaruhi timer yang mengikuti jam komputer Anda, yang tidak dipakai core ini.",
+		"slot.game": "Game",
+		"slot.game.help": "Game N-Gage, dalam salah satu dari empat bentuk. Game N-Gage 2.0 (.n-gage) dipasang oleh aplikasi N-Gage, dan wizard lalu meminta aplikasi itu dan RPKG ponsel sebagai firmware. Citra kartu (.blz) dibuka oleh installer BLZ, dan wizard lalu meminta installer itu sebagai firmware. Dump kartu (.rar, .zip, atau .7z yang berisi folder System\\Apps kartu) disalin ke kartu memori mesin. Paket Symbian (.sis, .sisx) dipasang ke drive C. Dalam setiap kasus, game yang terpasang berada di memori mesin itu sendiri, jadi ia termasuk dalam setiap savestate dan setiap movie yang dibuat dari proyek ini."
+	}
+}

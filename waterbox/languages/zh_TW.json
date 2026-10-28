@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "機器無法解開這個 .blz：BLZ 安裝程式韌體沒有執行，或沒有解開任何東西。",
+		"error.clock_start": "Clock start 設定為 '%1'。這是 UTC 的日期與時間，格式為 YYYY-MM-DD HH:MM:SS（或 YYYY-MM-DD），範圍從 1980 到 2099。",
+		"error.device_refused": "裝置被拒絕。",
+		"error.needs_rpkg": "這個 ROM 把磁碟機 Z 保存在第二個映像中，而專案中沒有手機的 RPKG。",
+		"error.ngage_not_installed": "機器無法接收這個 .n-gage：N-Gage 應用程式韌體沒有安裝，或遊戲無法放進記憶卡。",
+		"error.rom_device_refused": "ROM 中的裝置被拒絕。",
+		"error.rom_no_device": "ROM 沒有說明它是哪一個裝置。",
+		"error.rpkg_empty": "這不是 RPKG，或它不含任何檔案。",
+		"error.rpkg_no_device": "RPKG 沒有說明它是哪一個裝置。",
+		"error.rpkg_not_opened": "無法開啟 RPKG。",
+		"error.rpkg_not_read": "無法讀取 RPKG。",
+		"firmware.blzinstapp_sis": "BLZ 安裝程式（BLZinstapp.sis）",
+		"firmware.blzinstapp_sis.about": "解開 N-Gage .blz 卡映像的 Symbian 應用程式。.blz 是手機自己無法讀取的壓縮檔。這個應用程式會安裝在機器中，把遊戲解開到記憶卡上，遊戲就從那裡執行。只有 .blz 專案需要它。",
+		"firmware.ngage_sis": "N-Gage 2.0 應用程式（v1.40.1557）",
+		"firmware.ngage_sis.about": "N-Gage 2.0 應用程式，以安裝它的套件形式提供（N-Gage INSTALLER v.1.40.1557）。手機無法直接執行 .n-gage 檔。N-Gage 應用程式會在第一次啟動時，從 E:\\n-gage\\ 安裝這類遊戲。這個套件會安裝在機器中並啟動，之後遊戲會出現在它的 My Games 清單中，左側軟鍵為 Start Game。只有 .n-gage 專案需要它。",
+		"firmware.sym_rom": "Symbian 裝置 ROM",
+		"firmware.sym_rom.about": "手機 ROM 的傾印檔。它說明這是哪一個裝置（製造商、型號、韌體代碼與 Symbian 版本），並且含有手機的磁碟機 Z。它與遊戲合在一起，就是整台機器。任何 Symbian 手機的傾印檔都可以接受。不要求特定的檔案，因為每個型號的傾印檔都不同。",
+		"firmware.sym_rpkg": "Symbian 裝置 RPKG（SYM.RPKG）",
+		"firmware.sym_rpkg.about": "Symbian 9 手機磁碟機 Z 的其餘部分。這類手機在 ROM 映像中只保留核心系統。應用程式、資源，以及說明它是哪一台手機的檔案，都在第二個映像中，它會以 RPKG 檔的形式與 ROM 一同傾印。本核心在它所在的位置讀取它，作為磁碟機 Z，且不解開任何東西。不要求特定的檔案，因為每個型號的傾印檔都不同，但它必須是與所給 ROM 相屬的 RPKG。N-Gage 2.0 遊戲需要它，因為它是在這種手機上執行的。經過測試的是 Nokia 5320 XpressMusic。",
+		"setting.clockstart": "時鐘起點（UTC）",
+		"setting.clockstart.about": "機器啟動時，手機時鐘顯示的日期與時間，以 UTC 表示。格式為 YYYY-MM-DD HH:MM:SS，或只寫 YYYY-MM-DD，年份範圍為 1980 至 2099。這個時鐘屬於模擬的手機。它每次執行都從這裡開始，並隨手機執行的指令前進，絕不跟隨你電腦的時間。因此，從時間取得隨機數的遊戲，每次執行都會得到相同的數字。不同的日期會改變這類遊戲的行為，所以日期是機器的一部分，影片會記錄它。",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "手機的 OpenGL ES 1 圖形如何繪製。「emulated」（EKA2L1 的預設值，它稱之為「GPU accelerated GLES1」）以模擬器自己的函式庫取代手機的圖形函式庫。它使用本核心內建的軟體 OpenGL 繪製，在沙箱內執行，因此在每台電腦上結果都相同。「software」保留手機自己的繪圖程式碼，那是 Nokia 所寫、與其他手機程式碼一樣執行的。它較慢，但它正是手機當初所執行的，因此當遊戲的 3D 在「emulated」下看起來不對時，值得一試。無論選哪一個，影片都會以完全相同的方式播放，並記錄它是以哪一個錄製的。",
+		"setting.screenbuffersync": "螢幕緩衝區同步",
+		"setting.screenbuffersync.about": "手機的視窗系統組合出的畫面，是否也複製到應用程式可以讀取的螢幕記憶體中。「preferred」是 EKA2L1 自己的選擇：對較舊的手機（N-Gage、Symbian 6 至 8）開啟，對較新的（Symbian 9 及之後，包括 N-Gage 2.0）關閉。會讀取自己螢幕的遊戲，例如要存下螢幕截圖，或要在上一幀上繪製，需要開啟它，否則可能顯示舊的或損壞的畫面。其他一切在關閉時執行較快。複製會進入手機的記憶體，因此此設定是機器的一部分，影片會記錄它。另外兩個 EKA2L1 選項是刻意不列出的。「CPU emulation」在這裡一律是直譯器，因為在本核心中測得重新編譯器較慢。「Real-time accuracy」只影響跟隨你電腦時鐘的計時器，而本核心不使用它。",
+		"slot.game": "遊戲",
+		"slot.game.help": "N-Gage 遊戲，以四種形式之一提供。N-Gage 2.0 遊戲（.n-gage）由 N-Gage 應用程式安裝，然後精靈會要求該應用程式與手機的 RPKG 作為韌體。卡映像（.blz）由 BLZ 安裝程式解開，然後精靈會要求該安裝程式作為韌體。卡傾印檔（含有卡的 System\\Apps 資料夾的 .rar、.zip 或 .7z）會被複製到機器的記憶卡上。Symbian 套件（.sis、.sisx）會安裝到磁碟機 C。無論哪種情況，安裝的遊戲都在機器自己的記憶體中，因此它是每個即時存檔以及由此專案錄製的每部影片的一部分。"
+	}
+}

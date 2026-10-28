@@ -949,7 +949,7 @@ namespace chimera {
     bool machine::add_device_from_rom(const std::string &rom_path, const std::string &rpkg_path, std::string &error) {
         if (!eka2l1::loader::should_install_requires_additional_rpkg(rom_path)) {
             if (!add_device_from_rom(rom_path)) {
-                error = "the ROM does not say which device it is";
+                error = "error.rom_no_device";
                 return false;
             }
 
@@ -957,7 +957,7 @@ namespace chimera {
         }
 
         if (rpkg_path.empty()) {
-            error = "this ROM keeps drive Z in a second image, and the phone's RPKG was not given";
+            error = "error.needs_rpkg";
             return false;
         }
 
@@ -967,7 +967,7 @@ namespace chimera {
             std::FILE *f = std::fopen(rpkg_path.c_str(), "rb");
 
             if (!f) {
-                error = "the RPKG could not be opened";
+                error = "error.rpkg_not_opened";
                 return false;
             }
 
@@ -979,7 +979,7 @@ namespace chimera {
             std::fclose(f);
 
             if (!read) {
-                error = "the RPKG could not be read";
+                error = "error.rpkg_not_read";
                 return false;
             }
         }
@@ -987,7 +987,7 @@ namespace chimera {
         std::shared_ptr<memory_file_system> drives = std::make_shared<memory_file_system>();
 
         if (drives->mount_rpkg(drive_z, std::move(package)) <= 0) {
-            error = "the RPKG is not one, or holds no files";
+            error = "error.rpkg_empty";
             return false;
         }
 
@@ -1005,13 +1005,13 @@ namespace chimera {
         };
 
         if (!eka2l1::loader::determine_device_from_drive_files(read, list, manufacturer, firmcode, model, ver)) {
-            error = "the RPKG does not say which device it is";
+            error = "error.rpkg_no_device";
             return false;
         }
 
         if (sys_->get_device_manager()->add_new_device(firmcode, model, manufacturer, ver, 0)
             != eka2l1::add_device_none) {
-            error = "the device was refused";
+            error = "error.device_refused";
             return false;
         }
 

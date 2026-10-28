@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Maszyna nie mogła rozpakować tego .blz: oprogramowanie instalatora BLZ nie uruchomiło się albo nic nie rozpakowało.",
+		"error.clock_start": "Ustawienie Clock start to '%1'. Jest to data i godzina w czasie UTC, w formacie RRRR-MM-DD GG:MM:SS (albo RRRR-MM-DD), od 1980 do 2099 roku.",
+		"error.device_refused": "Urządzenie zostało odrzucone.",
+		"error.needs_rpkg": "Ten ROM trzyma dysk Z w drugim obrazie, a RPKG telefonu nie ma w projekcie.",
+		"error.ngage_not_installed": "Maszyna nie mogła przyjąć tego .n-gage: oprogramowanie aplikacji N-Gage nie zainstalowało się albo gry nie dało się umieścić na karcie pamięci.",
+		"error.rom_device_refused": "Urządzenie zapisane w ROM-ie zostało odrzucone.",
+		"error.rom_no_device": "ROM nie mówi, jakie to urządzenie.",
+		"error.rpkg_empty": "To nie jest RPKG albo nie zawiera żadnych plików.",
+		"error.rpkg_no_device": "RPKG nie mówi, jakie to urządzenie.",
+		"error.rpkg_not_opened": "Nie można otworzyć RPKG.",
+		"error.rpkg_not_read": "Nie można odczytać RPKG.",
+		"firmware.blzinstapp_sis": "Instalator BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Aplikacja Symbian, która rozpakowuje obraz karty N-Gage .blz. Plik .blz jest skompresowany i telefon sam go nie odczyta. Ta aplikacja jest instalowana w maszynie i rozpakowuje grę na kartę pamięci, a gra działa stamtąd. Potrzebna jest tylko w projekcie .blz.",
+		"firmware.ngage_sis": "Aplikacja N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "Aplikacja N-Gage 2.0, jako pakiet, który ją instaluje (N-Gage INSTALLER v.1.40.1557). Telefon nie może sam uruchomić pliku .n-gage. Aplikacja N-Gage instaluje taką grę z E:\\n-gage\\ przy pierwszym uruchomieniu. Ten pakiet jest instalowany w maszynie i uruchamiany, a gra pojawia się wtedy na jej liście Moje gry, z Start Game na lewym klawiszu programowym. Potrzebna jest tylko w projekcie .n-gage.",
+		"firmware.sym_rom": "ROM urządzenia Symbian",
+		"firmware.sym_rom.about": "Zrzut ROM telefonu. Mówi, jakie to urządzenie (producent, model, kod oprogramowania i wersja Symbian), i zawiera dysk Z telefonu. Razem z grą jest to cała maszyna. Przyjmowany jest zrzut z dowolnego telefonu Symbian. Nie wymaga się konkretnego pliku, bo zrzut każdego modelu jest innym plikiem.",
+		"firmware.sym_rpkg": "RPKG urządzenia Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Reszta dysku Z telefonu Symbian 9. Taki telefon trzyma w obrazie ROM tylko swój rdzeń systemu. Aplikacje, zasoby i pliki mówiące, jakim telefonem jest, leżą w drugim obrazie, zrzuconym jako plik RPKG obok ROM-u. Rdzeń czyta go tam, gdzie leży, jako dysk Z, i niczego nie rozpakowuje. Nie wymaga się konkretnego pliku, bo zrzut każdego modelu jest inny, ale musi to być RPKG należący do podanego z nim ROM-u. Jest potrzebny dla gry N-Gage 2.0, która działa na takim telefonie. Przetestowano Nokię 5320 XpressMusic.",
+		"setting.clockstart": "Start zegara (UTC)",
+		"setting.clockstart.about": "Data i godzina, jakie pokazuje zegar telefonu w chwili startu maszyny, w UTC. Zapisz ją jako RRRR-MM-DD GG:MM:SS albo po prostu RRRR-MM-DD, od 1980 do 2099. Zegar należy do emulowanego telefonu. Startuje tu przy każdym uruchomieniu i idzie wraz z instrukcjami, które wykonuje telefon, nigdy wraz z czasem komputera. Gra, która bierze liczby losowe z czasu, dostaje więc przy każdym uruchomieniu te same liczby. Inna data zmienia to, co taka gra robi, więc data jest częścią maszyny, a nagranie ją zapisuje.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Jak rysowana jest grafika OpenGL ES 1 telefonu. „emulated” (domyślne w EKA2L1, które nazywa to „GPU accelerated GLES1”) zastępuje bibliotekę graficzną telefonu biblioteką emulatora. Ta rysuje programowym OpenGL wbudowanym w ten rdzeń, wewnątrz piaskownicy, więc wynik jest taki sam na każdym komputerze. „software” zachowuje własny kod rysowania telefonu, napisany przez Nokię i uruchamiany jak każdy inny kod telefonu. Jest wolniejszy i jest dokładnie tym, co uruchamiał telefon, więc warto go wypróbować, gdy trójwymiar gry wygląda źle przy „emulated”. Przy obu wyborach nagranie odtwarza się identycznie i zapisuje, którym je zrobiono.",
+		"setting.screenbuffersync": "Synchronizacja bufora ekranu",
+		"setting.screenbuffersync.about": "Czy obraz składany przez system okien telefonu jest też kopiowany do pamięci ekranu, którą może odczytać aplikacja. „preferred” to własny wybór EKA2L1. Jest włączone dla starszego telefonu (N-Gage, Symbian 6 do 8), a wyłączone dla nowszego (Symbian 9 i późniejsze, w tym N-Gage 2.0). Gra, która czyta własny ekran, żeby zrobić zrzut ekranu albo narysować coś na poprzedniej klatce, potrzebuje tego włączonego i bez tego może pokazać stary albo zepsuty obraz. Wszystko inne działa szybciej przy wyłączonym. Kopia trafia do pamięci telefonu, więc ustawienie jest częścią maszyny, a nagranie je zapisuje. Dwie inne opcje EKA2L1 są celowo pominięte. „CPU emulation” jest tutaj zawsze interpreterem, bo zmierzono, że rekompilator w tym rdzeniu jest wolniejszy. „Real-time accuracy” wpływa tylko na zegar, który podąża za zegarem komputera, a tego rdzeń nie używa.",
+		"slot.game": "Gra",
+		"slot.game.help": "Gra N-Gage, w jednej z czterech postaci. Gra N-Gage 2.0 (.n-gage) jest instalowana przez aplikację N-Gage, a kreator pyta wtedy o tę aplikację i o RPKG telefonu jako oprogramowanie. Obraz karty (.blz) jest rozpakowywany przez instalator BLZ, a kreator pyta wtedy o ten instalator jako oprogramowanie. Zrzut karty (.rar, .zip albo .7z, który zawiera foldery System\\Apps karty) jest kopiowany na kartę pamięci maszyny. Pakiet Symbian (.sis, .sisx) jest instalowany na dysku C. We wszystkich przypadkach zainstalowana gra jest w pamięci własnej maszyny, więc należy do każdego zapisu stanu i każdego nagrania zrobionego z tego projektu."
+	}
+}

@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "기기가 이 .blz를 풀지 못했습니다. BLZ 설치 펌웨어가 실행되지 않았거나, 아무것도 풀지 못했습니다.",
+		"error.clock_start": "시작 시각 설정은 '%1'입니다. UTC 기준 날짜와 시간이며 형식은 YYYY-MM-DD HH:MM:SS(또는 YYYY-MM-DD), 범위는 1980년부터 2099년까지입니다.",
+		"error.device_refused": "장치가 거부되었습니다.",
+		"error.needs_rpkg": "이 ROM은 드라이브 Z를 두 번째 이미지에 담고 있는데, 프로젝트에 휴대폰의 RPKG가 없습니다.",
+		"error.ngage_not_installed": "기기가 이 .n-gage를 받지 못했습니다. N-Gage 응용 프로그램 펌웨어가 설치되지 않았거나, 게임을 메모리 카드에 넣을 수 없었습니다.",
+		"error.rom_device_refused": "ROM에 있는 장치가 거부되었습니다.",
+		"error.rom_no_device": "ROM에 이것이 어떤 장치인지 적혀 있지 않습니다.",
+		"error.rpkg_empty": "RPKG가 올바른 파일이 아니거나, 파일이 하나도 없습니다.",
+		"error.rpkg_no_device": "RPKG에 이것이 어떤 장치인지 적혀 있지 않습니다.",
+		"error.rpkg_not_opened": "RPKG를 열 수 없었습니다.",
+		"error.rpkg_not_read": "RPKG를 읽을 수 없었습니다.",
+		"firmware.blzinstapp_sis": "BLZ 설치 프로그램(BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "N-Gage의 .blz 카드 이미지를 풀어 주는 Symbian 응용 프로그램입니다. .blz는 휴대폰이 혼자서는 읽을 수 없는 압축 파일입니다. 이 응용 프로그램은 기기에 설치되어 게임을 메모리 카드에 풀며, 게임은 거기서 실행됩니다. .blz 프로젝트에만 필요합니다.",
+		"firmware.ngage_sis": "N-Gage 2.0 응용 프로그램(v1.40.1557)",
+		"firmware.ngage_sis.about": "N-Gage 2.0 응용 프로그램이며, 그것을 설치하는 패키지(N-Gage INSTALLER v.1.40.1557)로 들어 있습니다. 휴대폰은 .n-gage 파일을 직접 실행할 수 없습니다. N-Gage 응용 프로그램이 처음 시작될 때 E:\\n-gage\\ 에서 그런 게임을 설치합니다. 이 패키지는 기기에 설치되어 시작되며, 그러면 게임이 내 게임 목록에 나타나고, 왼쪽 소프트 키에 Start Game이 보입니다. .n-gage 프로젝트에만 필요합니다.",
+		"firmware.sym_rom": "Symbian 장치 ROM",
+		"firmware.sym_rom.about": "휴대폰 ROM의 덤프입니다. 이것이 어떤 장치인지(제조사, 모델, 펌웨어 코드, Symbian 버전)를 알려 주며, 드라이브 Z를 담고 있습니다. 게임과 함께라면 기기 전체입니다. 어떤 Symbian 휴대폰의 덤프든 받아들입니다. 모델마다 덤프 파일이 다르므로 특정 파일이 필요하지는 않습니다.",
+		"firmware.sym_rpkg": "Symbian 장치 RPKG(SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Symbian 9 휴대폰의 드라이브 Z 나머지 부분입니다. 이런 휴대폰은 ROM 이미지에 핵심 시스템만 담고 있습니다. 응용 프로그램, 리소스, 그리고 이것이 어떤 휴대폰인지 알려 주는 파일은 두 번째 이미지에 있으며, 이는 ROM 옆에 RPKG 파일로 덤프됩니다. 코어는 그것을 있는 자리에서 드라이브 Z로 읽으며, 아무것도 풀지 않습니다. 모델마다 덤프가 다르므로 특정 파일이 필요하지는 않지만, 함께 주는 ROM에 속한 RPKG여야 합니다. N-Gage 2.0 게임에 필요하며, 그 게임은 이런 휴대폰에서 실행됩니다. 시험된 것은 Nokia 5320 XpressMusic입니다.",
+		"setting.clockstart": "시계 시작(UTC)",
+		"setting.clockstart.about": "기기가 시작될 때 휴대폰 시계가 보여 주는 날짜와 시간이며, UTC 기준입니다. YYYY-MM-DD HH:MM:SS 또는 YYYY-MM-DD 형식으로 쓰며, 1980년부터 2099년까지입니다. 시계는 에뮬레이트된 휴대폰의 것입니다. 실행할 때마다 여기서 시작하며, 휴대폰이 실행하는 명령과 함께 흐르고, 컴퓨터의 시간과는 절대 함께 흐르지 않습니다. 따라서 시간에서 난수를 얻는 게임은 실행할 때마다 같은 난수를 얻습니다. 날짜가 다르면 그런 게임의 동작이 바뀌므로, 날짜는 기기의 일부이며 무비가 이것을 기록합니다.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "휴대폰의 OpenGL ES 1 그래픽을 어떻게 그릴지 정합니다. 'emulated'(EKA2L1의 기본값으로, 'GPU accelerated GLES1'이라고 부릅니다)는 휴대폰 자신의 그래픽 라이브러리를 에뮬레이터의 것으로 바꿉니다. 그것은 이 코어 안에 내장된 소프트웨어 OpenGL로 그리므로, 샌드박스 안에서 결과가 어느 컴퓨터에서나 같습니다. 'software'는 Nokia가 작성한 휴대폰 자신의 그리기 코드를 유지하며, 다른 휴대폰 코드와 마찬가지로 실행합니다. 더 느리며, 휴대폰이 실제로 실행하던 것과 정확히 같습니다. 'emulated'로 게임의 3D가 잘못 보일 때 시도해 볼 만합니다. 어느 선택이든 무비는 똑같이 재생되며, 어느 쪽으로 만들었는지 기록합니다.",
+		"setting.screenbuffersync": "화면 버퍼 동기",
+		"setting.screenbuffersync.about": "휴대폰의 창 시스템이 조합한 화면을 응용 프로그램이 읽을 수 있는 화면 메모리에도 복사할지 정합니다. 'preferred'는 EKA2L1 자체의 선택입니다. 오래된 휴대폰(N-Gage, Symbian 6부터 8)에서는 켜고, 새 휴대폰(Symbian 9 이후, N-Gage 2.0 포함)에서는 끕니다. 자신의 화면을 읽는 게임, 예를 들어 스크린샷을 저장하거나 마지막 프레임 위에 그리는 게임은 이것을 켜야 하며, 끄면 오래되었거나 깨진 화면이 나올 수 있습니다. 그 밖의 것은 끄면 더 빨리 실행됩니다. 복사는 휴대폰의 메모리로 들어가므로, 이 설정은 기기의 일부이며 무비가 이것을 기록합니다. 여기서는 EKA2L1의 다른 두 옵션을 일부러 뺐습니다. 'CPU emulation'은 여기서 항상 인터프리터이며, 리컴파일러는 이 코어에서 더 느리다고 측정되었기 때문입니다. 'Real-time accuracy'는 컴퓨터의 시계를 따르는 타이머에만 영향을 주는데, 이 코어는 그 시계를 쓰지 않습니다.",
+		"slot.game": "게임",
+		"slot.game.help": "N-Gage 게임이며, 네 가지 형태 중 하나입니다. N-Gage 2.0 게임(.n-gage)은 N-Gage 응용 프로그램이 설치하며, 그러면 마법사가 그 응용 프로그램과 휴대폰의 RPKG를 펌웨어로 요청합니다. 카드 이미지(.blz)는 BLZ 설치 프로그램이 풀며, 그러면 마법사가 그 설치 프로그램을 펌웨어로 요청합니다. 카드 덤프(카드의 System\\Apps 폴더를 담은 .rar, .zip, .7z)는 기기의 메모리 카드에 복사됩니다. Symbian 패키지(.sis, .sisx)는 드라이브 C에 설치됩니다. 어느 경우든 설치된 게임은 기기 자신의 메모리에 있으므로, 모든 세이브스테이트와 이 프로젝트로 만든 모든 무비의 일부가 됩니다."
+	}
+}

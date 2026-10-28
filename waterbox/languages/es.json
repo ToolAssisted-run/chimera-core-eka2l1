@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "La máquina no pudo descomprimir este .blz: el firmware del instalador BLZ no se ejecutó, o no descomprimió nada.",
+		"error.clock_start": "El ajuste Clock start es '%1'. Es una fecha y hora en UTC, AAAA-MM-DD HH:MM:SS (o AAAA-MM-DD), de 1980 a 2099.",
+		"error.device_refused": "Se rechazó el dispositivo.",
+		"error.needs_rpkg": "Esta ROM guarda la unidad Z en una segunda imagen, y el RPKG del teléfono no está en el proyecto.",
+		"error.ngage_not_installed": "La máquina no pudo aceptar este .n-gage: la aplicación de firmware de N-Gage no se instaló, o el juego no se pudo poner en la tarjeta de memoria.",
+		"error.rom_device_refused": "Se rechazó el dispositivo de la ROM.",
+		"error.rom_no_device": "La ROM no indica qué dispositivo es.",
+		"error.rpkg_empty": "El RPKG no es válido, o no contiene archivos.",
+		"error.rpkg_no_device": "El RPKG no indica qué dispositivo es.",
+		"error.rpkg_not_opened": "No se pudo abrir el RPKG.",
+		"error.rpkg_not_read": "No se pudo leer el RPKG.",
+		"firmware.blzinstapp_sis": "Instalador BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "La aplicación de Symbian que descomprime una imagen de tarjeta .blz de N-Gage. Un .blz es un archivo comprimido que el teléfono no puede leer por sí solo. Esta aplicación se instala en la máquina y descomprime el juego en la tarjeta de memoria, y desde allí se ejecuta el juego. Solo hace falta para un proyecto .blz.",
+		"firmware.ngage_sis": "Aplicación N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "La aplicación N-Gage 2.0, como el paquete que la instala (N-Gage INSTALLER v.1.40.1557). El teléfono no puede ejecutar un archivo .n-gage directamente. La aplicación N-Gage instala ese juego desde E:\\n-gage\\ la primera vez que se inicia. Este paquete se instala en la máquina y se inicia, y entonces el juego aparece en su lista Mis juegos, con Iniciar juego en la tecla de función izquierda. Solo hace falta para un proyecto .n-gage.",
+		"firmware.sym_rom": "ROM del dispositivo Symbian",
+		"firmware.sym_rom.about": "Un volcado de la ROM del teléfono. Indica qué dispositivo es (fabricante, modelo, código de firmware y versión de Symbian) y contiene la unidad Z del teléfono. Junto con el juego, forma la máquina completa. Se acepta un volcado de cualquier teléfono Symbian. No se exige un archivo concreto, porque el volcado de cada modelo es un archivo distinto.",
+		"firmware.sym_rpkg": "RPKG del dispositivo Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "El resto de la unidad Z de un teléfono Symbian 9. Un teléfono así guarda solo su sistema básico en la imagen de la ROM. Las aplicaciones, los recursos y los archivos que dicen qué teléfono es están en una segunda imagen, que se vuelca como archivo RPKG junto a la ROM. El núcleo la lee donde está, como unidad Z, y no descomprime nada. No se exige un archivo concreto, porque el volcado de cada modelo es distinto, pero debe ser el RPKG que corresponde a la ROM que se da con él. Se necesita para un juego de N-Gage 2.0, que funciona en un teléfono así. El Nokia 5320 XpressMusic es el que se probó.",
+		"setting.clockstart": "Inicio del reloj (UTC)",
+		"setting.clockstart.about": "La fecha y la hora que muestra el reloj del teléfono cuando arranca la máquina, en UTC. Escríbalas como AAAA-MM-DD HH:MM:SS o solo AAAA-MM-DD, entre 1980 y 2099. El reloj pertenece al teléfono emulado. Empieza aquí en cada ejecución y avanza con las instrucciones que ejecuta el teléfono, nunca con la hora de su ordenador. Un juego que toma sus números aleatorios de la hora recibe por tanto los mismos números en cada ejecución. Una fecha distinta cambia lo que hace un juego así, de modo que la fecha forma parte de la máquina y una película la registra.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Cómo se dibujan los gráficos OpenGL ES 1 del teléfono. 'emulated' (el valor predeterminado de EKA2L1, que lo llama 'GLES1 acelerado por GPU') sustituye la biblioteca gráfica del teléfono por la del emulador. Esta dibuja con el OpenGL por software incluido en este núcleo, dentro del entorno aislado, así que el resultado es el mismo en cada ordenador. 'software' mantiene el código de dibujo propio del teléfono, escrito por Nokia y ejecutado como cualquier otro código del teléfono. Es más lento, y es exactamente lo que ejecutaba el teléfono, así que conviene probarlo cuando el 3D de un juego se ve mal con 'emulated'. Con cualquiera de las dos opciones una película se reproduce de forma idéntica, y registra con cuál se hizo.",
+		"setting.screenbuffersync": "Sincronización del búfer de pantalla",
+		"setting.screenbuffersync.about": "Si la imagen que compone el sistema de ventanas del teléfono también se copia a la memoria de pantalla que puede leer una aplicación. 'preferred' es la elección propia de EKA2L1. Está activada para un teléfono antiguo (N-Gage, Symbian 6 a 8) y desactivada para uno más nuevo (Symbian 9 y posteriores, incluido N-Gage 2.0). Un juego que lee su propia pantalla, para guardar una captura o para dibujar sobre el último fotograma, necesita que esté activada, y sin ella puede mostrar una imagen antigua o rota. Todo lo demás va más deprisa desactivada. La copia va a la memoria del teléfono, así que el ajuste forma parte de la máquina y una película lo registra. Otras dos opciones de EKA2L1 se dejan fuera a propósito. 'CPU emulation' es siempre el intérprete aquí, porque se midió que el recompilador era más lento en este núcleo. 'Real-time accuracy' solo afecta a un temporizador que sigue el reloj de su ordenador, que este núcleo no usa.",
+		"slot.game": "Juego",
+		"slot.game.help": "Un juego de N-Gage, en una de cuatro formas. Un juego de N-Gage 2.0 (.n-gage) lo instala la aplicación N-Gage, y el asistente pide entonces esa aplicación y el RPKG del teléfono como firmware. Una imagen de tarjeta (.blz) la descomprime el instalador BLZ, y el asistente pide entonces ese instalador como firmware. Un volcado de tarjeta (un .rar, .zip o .7z que contiene las carpetas System\\Apps de la tarjeta) se copia a la tarjeta de memoria de la máquina. Un paquete de Symbian (.sis, .sisx) se instala en la unidad C. En todos los casos el juego instalado está en la memoria propia de la máquina, así que forma parte de cada estado guardado y de cada película hecha con este proyecto."
+	}
+}

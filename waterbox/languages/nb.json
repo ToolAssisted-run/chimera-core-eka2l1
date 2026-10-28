@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Maskinen kunne ikke pakke ut denne .blz-filen: BLZ-installasjonsfastvaren kjørte ikke, eller pakket ut ingenting.",
+		"error.clock_start": "Innstillingen Clock start er '%1'. Det er en dato og et klokkeslett i UTC, YYYY-MM-DD HH:MM:SS (eller YYYY-MM-DD), fra 1980 til 2099.",
+		"error.device_refused": "Enheten ble avvist.",
+		"error.needs_rpkg": "Denne ROM-en har stasjon Z i et annet bilde, og telefonens RPKG er ikke i prosjektet.",
+		"error.ngage_not_installed": "Maskinen kunne ikke ta imot denne .n-gage-filen: N-Gage-programfastvaren ble ikke installert, eller spillet kunne ikke legges på minnekortet.",
+		"error.rom_device_refused": "Enheten i ROM-en ble avvist.",
+		"error.rom_no_device": "ROM-en sier ikke hvilken enhet den er.",
+		"error.rpkg_empty": "RPKG-filen er ikke en RPKG, eller den holder ingen filer.",
+		"error.rpkg_no_device": "RPKG-filen sier ikke hvilken enhet den er.",
+		"error.rpkg_not_opened": "RPKG-filen kunne ikke åpnes.",
+		"error.rpkg_not_read": "RPKG-filen kunne ikke leses.",
+		"firmware.blzinstapp_sis": "BLZ-installasjonsprogram (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Symbian-programmet som pakker ut et N-Gage .blz-kortbilde. En .blz er en komprimert fil som telefonen ikke kan lese alene. Dette programmet installeres i maskinen og pakker spillet ut på minnekortet, og spillet kjører derfra. Det trengs bare for et .blz-prosjekt.",
+		"firmware.ngage_sis": "N-Gage 2.0-program (v1.40.1557)",
+		"firmware.ngage_sis.about": "N-Gage 2.0-programmet, som pakken som installerer det (N-Gage INSTALLER v.1.40.1557). Telefonen kan ikke kjøre en .n-gage-fil direkte. N-Gage-programmet installerer et slikt spill fra E:\\n-gage\\ første gang det startes. Denne pakken installeres i maskinen og startes, og spillet dukker da opp i listen Mine spill, med Start spill på venstre myke tast. Det trengs bare for et .n-gage-prosjekt.",
+		"firmware.sym_rom": "Symbian-enhetens ROM",
+		"firmware.sym_rom.about": "En avbildning av telefonens ROM. Den sier hvilken enhet dette er (produsent, modell, fastvarekode og Symbian-versjon), og den holder telefonens stasjon Z. Sammen med spillet er den hele maskinen. En avbildning fra hvilken som helst Symbian-telefon godtas. Ingen bestemt fil kreves, for hver modells avbildning er en egen fil.",
+		"firmware.sym_rpkg": "Symbian-enhetens RPKG (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Resten av stasjon Z på en Symbian 9-telefon. En slik telefon holder bare kjernesystemet sitt i ROM-avbildningen. Programmene, ressursene og filene som sier hvilken telefon det er, ligger i et andre bilde, som dumpes som en RPKG-fil ved siden av ROM-en. Kjernen leser den der den ligger, som stasjon Z, og pakker ingenting ut. Ingen bestemt fil kreves, for hver modells avbildning er forskjellig, men den må være RPKG-en som hører til ROM-en som er gitt sammen med den. Den trengs for et N-Gage 2.0-spill, som kjører på en slik telefon. Nokia 5320 XpressMusic er den som er testet.",
+		"setting.clockstart": "Klokkestart (UTC)",
+		"setting.clockstart.about": "Dato og klokkeslett telefonens klokke viser når maskinen starter, i UTC. Skriv det som ÅÅÅÅ-MM-DD TT:MM:SS eller bare ÅÅÅÅ-MM-DD, fra 1980 til 2099. Klokken hører til den emulerte telefonen. Den starter her ved hver kjøring og går videre med instruksjonene telefonen utfører, aldri med datamaskinens tid. Et spill som henter sine tilfeldige tall fra tiden, får derfor de samme tallene ved hver kjøring. En annen dato endrer hva et slikt spill gjør, så datoen er en del av maskinen, og en filmfil registrerer den.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Hvordan telefonens OpenGL ES 1-grafikk tegnes. 'emulated' (EKA2L1 sin standard, som den kaller 'GPU accelerated GLES1') erstatter telefonens egen grafikkbibliotek med emulatorens. Det tegner med den programvarebaserte OpenGL som er innebygd i denne kjernen, inne i sandkassen, så resultatet er det samme på hver datamaskin. 'software' beholder telefonens egen tegnekode, skrevet av Nokia og kjørt som all annen telefonkode. Den er tregere, og den er nøyaktig det telefonen kjørte, så det er verdt å prøve når et spills 3D ser feil ut med 'emulated'. Med begge valgene spilles en filmfil av likt, og den registrerer hvilket den ble laget med.",
+		"setting.screenbuffersync": "Synkronisering av skjermbuffer",
+		"setting.screenbuffersync.about": "Om bildet telefonens vindussystem setter sammen, også kopieres inn i skjermminnet som et program kan lese. 'preferred' er EKA2L1 sitt eget valg. Det er på for en eldre telefon (N-Gage, Symbian 6 til 8) og av for en nyere (Symbian 9 og senere, inkludert N-Gage 2.0). Et spill som leser sin egen skjerm, for å lagre et skjermbilde eller tegne over forrige bilderute, trenger den på og kan vise et gammelt eller ødelagt bilde uten den. Alt annet går raskere med den av. Kopien går inn i telefonens minne, så innstillingen er en del av maskinen, og en filmfil registrerer den. To andre EKA2L1-valg er bevisst utelatt. 'CPU emulation' er her alltid tolkeren, for rekompilatoren ble målt til å være tregere i denne kjernen. 'Real-time accuracy' påvirker bare en tidtaker som følger datamaskinens klokke, og det bruker ikke denne kjernen.",
+		"slot.game": "Spill",
+		"slot.game.help": "Et N-Gage-spill, i en av fire former. Et N-Gage 2.0-spill (.n-gage) installeres av N-Gage-programmet, og veiviseren spør da etter det programmet og telefonens RPKG som fastvare. Et kortbilde (.blz) pakkes ut av BLZ-installasjonsprogrammet, og veiviseren spør da etter det installasjonsprogrammet som fastvare. En kortplate (en .rar, .zip eller .7z som holder kortets System\\Apps-mapper) kopieres inn på maskinens minnekort. En Symbian-pakke (.sis, .sisx) installeres på stasjon C. I alle tilfeller ligger det installerte spillet i maskinens eget minne, så det er en del av hvert lagringspunkt og hver filmfil laget fra dette prosjektet."
+	}
+}

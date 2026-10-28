@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "A gép nem tudta kibontani ezt a .blz-fájlt: a BLZ-telepítő firmware nem futott le, vagy semmit sem bontott ki.",
+		"error.clock_start": "A Clock start beállítás értéke '%1'. Ez egy dátum és idő UTC szerint, ÉÉÉÉ-HH-NN ÓÓ:PP:MP formában (vagy ÉÉÉÉ-HH-NN), 1980 és 2099 között.",
+		"error.device_refused": "Az eszközt elutasították.",
+		"error.needs_rpkg": "Ez a ROM a Z meghajtót egy második képben tartja, és a telefon RPKG-ja nincs a projektben.",
+		"error.ngage_not_installed": "A gép nem tudta befogadni ezt a .n-gage fájlt: az N-Gage alkalmazás firmware-e nem települt, vagy a játékot nem lehetett a memóriakártyára tenni.",
+		"error.rom_device_refused": "A ROM-ban lévő eszközt elutasították.",
+		"error.rom_no_device": "A ROM nem mondja meg, milyen eszköz.",
+		"error.rpkg_empty": "Az RPKG nem az, vagy nem tartalmaz fájlokat.",
+		"error.rpkg_no_device": "Az RPKG nem mondja meg, milyen eszköz.",
+		"error.rpkg_not_opened": "Az RPKG nem nyitható meg.",
+		"error.rpkg_not_read": "Az RPKG nem olvasható.",
+		"firmware.blzinstapp_sis": "BLZ-telepítő (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "A Symbian-alkalmazás, amely egy N-Gage .blz kártyaképet kibont. A .blz olyan tömörített fájl, amelyet a telefon magától nem tud olvasni. Ez az alkalmazás települ a gépbe, kibontja a játékot a memóriakártyára, és a játék onnan fut. Csak .blz projekthez kell.",
+		"firmware.ngage_sis": "N-Gage 2.0 alkalmazás (v1.40.1557)",
+		"firmware.ngage_sis.about": "Az N-Gage 2.0 alkalmazás, abban a csomagban, amely telepíti (N-Gage INSTALLER v.1.40.1557). A telefon nem tudja közvetlenül futtatni az .n-gage fájlt. Az N-Gage alkalmazás első indításkor az E:\\n-gage\\ mappából telepíti az ilyen játékot. Ez a csomag települ a gépbe, és elindul, a játék pedig megjelenik az Játékaim listájában, a bal oldali szoftgombon a Játék indítása felirattal. Csak .n-gage projekthez kell.",
+		"firmware.sym_rom": "Symbian eszköz-ROM",
+		"firmware.sym_rom.about": "A telefon ROM-jának másolata. Megmondja, milyen eszköz ez (gyártó, típus, firmware-kód és Symbian-verzió), és benne van a telefon Z meghajtója. A játékkal együtt ez az egész gép. Bármely Symbian-telefon másolata elfogadott. Nincs megkövetelt konkrét fájl, mert minden típus másolata más fájl.",
+		"firmware.sym_rpkg": "Symbian eszköz RPKG (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "A Symbian 9 telefon Z meghajtójának többi része. Egy ilyen telefon a ROM-képen csak a rendszermagját tartja. Az alkalmazások, az erőforrások és azok a fájlok, amelyek megmondják, melyik telefon ez, egy második képben vannak, amelyet az RPKG-fájlként a ROM mellé mentenek. A mag ott olvassa, ahol van, mint Z meghajtót, és semmit nem bont ki. Nincs megkövetelt konkrét fájl, mert minden típus másolata más, de annak a ROM-nak kell az RPKG-jének lennie, amelyhez mellékelve van. Egy N-Gage 2.0 játékhoz kell, amely egy ilyen telefonon fut. A tesztelt készülék a Nokia 5320 XpressMusic volt.",
+		"setting.clockstart": "Órakezdés (UTC)",
+		"setting.clockstart.about": "Az a dátum és időpont, amelyet a telefon órája mutat a gép indulásakor, UTC-ben. ÉÉÉÉ-HH-NN ÓÓ:PP:MM alakban írja, vagy csak ÉÉÉÉ-HH-NN alakban, 1980 és 2099 között. Az óra az emulált telefoné. Minden futtatáskor itt indul, és a telefon által végrehajtott utasításokkal halad, soha nem a számítógép idejével. Egy játék, amely a véletlen számait az időből veszi, ezért minden futtatáskor ugyanazokat a számokat kapja. Más dátum megváltoztatja, mit csinál egy ilyen játék, ezért a dátum a gép része, és a felvétel rögzíti.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Hogyan rajzolódik a telefon OpenGL ES 1 grafikája. Az „emulated” (az EKA2L1 alapértelmezése, amelyet „GPU accelerated GLES1”-nek nevez) a telefon saját grafikus könyvtárát az emulátoréval helyettesíti. Ez a mag belsejében, a homokozóban futó szoftveres OpenGL-lel rajzol, így az eredmény minden számítógépen ugyanaz. A „software” a telefon saját rajzoló kódját tartja meg, amelyet a Nokia írt, és mint bármely más telefonkódot, úgy futtatja. Lassabb, és pontosan a fut vele, amit a telefon futtatott, ezért érdemes kipróbálni, ha egy játék 3D-je az „emulated” móddal hibásnak látszik. Mindkét választással a felvétel azonosan játszódik vissza, és rögzíti, melyikkel készült.",
+		"setting.screenbuffersync": "Képernyőpuffer-szinkron",
+		"setting.screenbuffersync.about": "Az ablakrendszer által összerakott kép be legyen-e másolva abba a képernyőmemóriába is, amelyet egy alkalmazás olvashat. A „preferred” (előnyben részesített) az EKA2L1 saját választása. Bekapcsolva van egy régebbi telefonon (N-Gage, Symbian 6-tól 8-ig), kikapcsolva egy újabbon (Symbian 9-től, az N-Gage 2.0-t is beleértve). Az a játék, amely a saját képernyőjét olvassa, például képernyőképhez vagy az utolsó képkocka fölé rajzoláshoz, bekapcsolva kell kapja, és e nélkül régi vagy hibás képet mutathat. Minden más gyorsabban fut kikapcsolva. A másolat a telefon memóriájába kerül, ezért a beállítás a gép része, és a felvétel rögzíti. Két másik EKA2L1-beállítás szándékosan kimaradt. A „CPU emulation” (CPU-emuláció) itt mindig az értelmező, mert a mérések szerint ebben a magban az átfordító lassabb. A „Real-time accuracy” (valós idejű pontosság) csak egy olyan időzítőt érint, amely a számítógép óráját követi, a mag pedig ezt nem használja.",
+		"slot.game": "Játék",
+		"slot.game.help": "N-Gage-játék, négyféle formában. Az N-Gage 2.0 játék (.n-gage) az N-Gage alkalmazás telepíti, és a varázsló ezután kéri ezt az alkalmazást és a telefon RPKG-ját firmware-ként. A kártyakép (.blz) a BLZ-telepítő bontja ki, és a varázsló ezután kéri ezt a telepítőt firmware-ként. A kártyamásolat (.rar, .zip vagy .7z, amely a kártya System\\Apps mappáit tartalmazza) a gép memóriakártyájára másolódik. A Symbian-csomag (.sis, .sisx) a C meghajtóra települ. Minden esetben a telepített játék a gép saját memóriájában van, ezért része minden mentésállapotnak és a projektből készült minden felvételnek."
+	}
+}

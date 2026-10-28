@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Aparatul nu a putut dezarhiva acest .blz: firmware-ul instalatorului BLZ nu a rulat sau nu a dezarhivat nimic.",
+		"error.clock_start": "Setarea Clock start este „%1”. Este o dată și o oră în UTC, YYYY-MM-DD HH:MM:SS (sau YYYY-MM-DD), între 1980 și 2099.",
+		"error.device_refused": "Dispozitivul a fost refuzat.",
+		"error.needs_rpkg": "Acest ROM ține unitatea Z într-o a doua imagine, iar RPKG-ul telefonului nu este în proiect.",
+		"error.ngage_not_installed": "Aparatul nu a putut prelua acest .n-gage: firmware-ul aplicației N-Gage nu s-a instalat sau jocul nu a putut fi pus pe cardul de memorie.",
+		"error.rom_device_refused": "Dispozitivul din ROM a fost refuzat.",
+		"error.rom_no_device": "ROM-ul nu spune ce dispozitiv este.",
+		"error.rpkg_empty": "RPKG-ul nu este unul valid sau nu conține fișiere.",
+		"error.rpkg_no_device": "RPKG-ul nu spune ce dispozitiv este.",
+		"error.rpkg_not_opened": "RPKG-ul nu a putut fi deschis.",
+		"error.rpkg_not_read": "RPKG-ul nu a putut fi citit.",
+		"firmware.blzinstapp_sis": "Instalator BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Aplicația Symbian care dezarhivează o imagine de card N-Gage .blz. Un .blz este un fișier comprimat pe care telefonul nu îl poate citi singur. Această aplicație este instalată în aparat și dezarhivează jocul pe cardul de memorie, iar jocul rulează de acolo. Este necesară doar pentru un proiect .blz.",
+		"firmware.ngage_sis": "Aplicația N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "Aplicația N-Gage 2.0, ca pachetul care o instalează (N-Gage INSTALLER v.1.40.1557). Telefonul nu poate rula direct un fișier .n-gage. Aplicația N-Gage instalează un astfel de joc din E:\\n-gage\\ prima dată când este pornită. Acest pachet este instalat în aparat și pornit, iar jocul apare apoi în lista sa Jocurile mele, cu Start Game sub tasta soft din stânga. Este necesar doar pentru un proiect .n-gage.",
+		"firmware.sym_rom": "ROM-ul dispozitivului Symbian",
+		"firmware.sym_rom.about": "O copie a ROM-ului telefonului. Spune ce dispozitiv este (producător, model, cod de firmware și versiunea Symbian) și conține unitatea Z a telefonului. Împreună cu jocul, este întregul aparat. Este acceptată o copie de la orice telefon Symbian. Nu se cere un fișier anume, pentru că fiecare model are o copie diferită.",
+		"firmware.sym_rpkg": "RPKG-ul dispozitivului Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Restul unității Z a unui telefon Symbian 9. Un astfel de telefon ține în imaginea ROM doar sistemul său de bază. Aplicațiile, resursele și fișierele care spun ce telefon este se află într-o a doua imagine, care este copiată ca fișier RPKG lângă ROM. Nucleul o citește acolo unde este, ca unitatea Z, și nu dezarhivează nimic. Nu se cere un fișier anume, pentru că fiecare model are o copie diferită, dar trebuie să fie RPKG-ul care aparține ROM-ului dat împreună cu el. Este necesar pentru un joc N-Gage 2.0, care rulează pe un astfel de telefon. Nokia 5320 XpressMusic este cel testat.",
+		"setting.clockstart": "Pornire ceas (UTC)",
+		"setting.clockstart.about": "Data și ora pe care le arată ceasul telefonului când pornește aparatul, în UTC. Scrieți-le ca AAAA-LL-ZZ OO:MM:SS sau doar AAAA-LL-ZZ, între 1980 și 2099. Ceasul aparține telefonului emulat. Pornește aici la fiecare rulare și avansează cu instrucțiunile pe care le execută telefonul, niciodată cu ora calculatorului dumneavoastră. Un joc care își alege numerele aleatoare după oră primește deci aceleași numere la fiecare rulare. O altă dată schimbă ce face un astfel de joc, deci data face parte din aparat, iar o înregistrare o notează.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Cum sunt desenate grafica OpenGL ES 1 a telefonului. „emulated” (implicitul EKA2L1, pe care îl numește „GPU accelerated GLES1”) înlocuiește biblioteca grafică a telefonului cu cea a emulatorului. Aceasta desenează cu OpenGL-ul software integrat în acest nucleu, în mediul izolat, deci rezultatul este același pe orice calculator. „software” păstrează codul de desenare al telefonului, scris de Nokia și rulat ca orice alt cod de telefon. Este mai lent și este exact ce rula telefonul, deci merită încercat când grafica 3D a unui joc arată greșit cu „emulated”. Cu oricare alegere, o înregistrare se redă identic, iar notează cu care a fost făcută.",
+		"setting.screenbuffersync": "Sincronizarea bufferului de ecran",
+		"setting.screenbuffersync.about": "Dacă imaginea pe care o pune cap la cap sistemul de ferestre al telefonului este copiată și în memoria de ecran pe care o poate citi o aplicație. „preferred” este alegerea proprie a EKA2L1. Este pornită pentru un telefon mai vechi (N-Gage, Symbian 6 până la 8) și oprită pentru unul mai nou (Symbian 9 și ulterioare, inclusiv N-Gage 2.0). Un joc care își citește propriul ecran, ca să salveze o captură sau să deseneze peste ultimul cadru, are nevoie de ea pornită și poate arăta o imagine veche sau stricată fără ea. Restul merge mai repede cu ea oprită. Copia intră în memoria telefonului, deci setarea face parte din aparat, iar o înregistrare o notează. Două alte opțiuni EKA2L1 sunt lăsate intenționat deoparte. „CPU emulation” este aici mereu interpretorul, pentru că recompilatorul s-a dovedit mai lent în acest nucleu. „Real-time accuracy” afectează doar un temporizator care urmează ceasul calculatorului dumneavoastră, ceea ce acest nucleu nu folosește.",
+		"slot.game": "Joc",
+		"slot.game.help": "Un joc N-Gage, în una din patru forme. Un joc N-Gage 2.0 (.n-gage) este instalat de aplicația N-Gage, iar asistentul cere apoi acea aplicație și RPKG-ul telefonului ca firmware. O imagine de card (.blz) este dezarhivată de instalatorul BLZ, iar asistentul cere apoi acel instalator ca firmware. O copie de card (un .rar, .zip sau .7z care conține dosarele System\\Apps ale cardului) este copiată pe cardul de memorie al aparatului. Un pachet Symbian (.sis, .sisx) este instalat pe unitatea C. În fiecare caz, jocul instalat se află în memoria proprie a aparatului, deci face parte din fiecare salvare de stare și din fiecare înregistrare făcută din acest proiect."
+	}
+}

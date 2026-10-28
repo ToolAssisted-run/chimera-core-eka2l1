@@ -3,7 +3,7 @@
   "slots": [
     {
       "id": "game",
-      "title": "Game",
+      "title": "slot.game",
       "min": 1,
       "max": 1,
       "formats": [
@@ -15,7 +15,7 @@
         "sis",
         "sisx"
       ],
-      "help": "An N-Gage game, in one of four forms. An N-Gage 2.0 game (.n-gage) is installed by the N-Gage application, and the wizard then asks for that application and for the phone's RPKG as firmware. A card image (.blz) is unpacked by the BLZ installer, and the wizard then asks for that installer as firmware. A card dump (a .rar, .zip or .7z that holds the card's System\\Apps folders) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto drive C. In every case the installed game is in the machine's own memory, so it is part of every savestate and every movie made from this project."
+      "help": "slot.game.help"
     }
   ]
 }

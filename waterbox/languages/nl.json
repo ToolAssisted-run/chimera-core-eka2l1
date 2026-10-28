@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Het apparaat kon deze .blz niet uitpakken: de BLZ-installerfirmware heeft niet gedraaid, of heeft niets uitgepakt.",
+		"error.clock_start": "De instelling Clock start is '%1'. Dit is een datum en tijd in UTC, YYYY-MM-DD HH:MM:SS (of YYYY-MM-DD), van 1980 tot 2099.",
+		"error.device_refused": "Het apparaat is geweigerd.",
+		"error.needs_rpkg": "Deze ROM houdt station Z in een tweede beeld, en de RPKG van de telefoon zit niet in het project.",
+		"error.ngage_not_installed": "Het apparaat kon deze .n-gage niet overnemen: de N-Gage-applicatiefirmware is niet geïnstalleerd, of het spel kon niet op de geheugenkaart worden gezet.",
+		"error.rom_device_refused": "Het apparaat in de ROM is geweigerd.",
+		"error.rom_no_device": "De ROM zegt niet welk apparaat het is.",
+		"error.rpkg_empty": "De RPKG is geen RPKG, of bevat geen bestanden.",
+		"error.rpkg_no_device": "De RPKG zegt niet welk apparaat het is.",
+		"error.rpkg_not_opened": "De RPKG kon niet worden geopend.",
+		"error.rpkg_not_read": "De RPKG kon niet worden gelezen.",
+		"firmware.blzinstapp_sis": "BLZ-installer (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "De Symbian-applicatie die een N-Gage .blz-kaartbeeld uitpakt. Een .blz is een gecomprimeerd bestand dat de telefoon zelf niet kan lezen. Deze applicatie wordt in de machine geïnstalleerd en pakt het spel uit op de geheugenkaart, en het spel draait vanaf daar. Hij is alleen nodig voor een .blz-project.",
+		"firmware.ngage_sis": "N-Gage 2.0-applicatie (v1.40.1557)",
+		"firmware.ngage_sis.about": "De N-Gage 2.0-applicatie, als het pakket dat hem installeert (N-Gage INSTALLER v.1.40.1557). De telefoon kan een .n-gage-bestand niet direct draaien. De N-Gage-applicatie installeert zo'n spel vanuit E:\\n-gage\\ de eerste keer dat hij wordt gestart. Dit pakket wordt in de machine geïnstalleerd en gestart, en het spel verschijnt dan in zijn lijst Mijn spellen, met Spel starten op de linker softkey. Het is alleen nodig voor een .n-gage-project.",
+		"firmware.sym_rom": "Symbian-apparaat-ROM",
+		"firmware.sym_rom.about": "Een dump van de ROM van de telefoon. Die zegt welk apparaat dit is (maker, model, firmwarecode en Symbian-versie) en bevat station Z van de telefoon. Samen met het spel is het de hele machine. Een dump van elke Symbian-telefoon wordt geaccepteerd. Er is geen specifiek bestand vereist, omdat de dump van elk model een ander bestand is.",
+		"firmware.sym_rpkg": "Symbian-apparaat-RPKG (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Het overige deel van station Z van een Symbian 9-telefoon. Zo'n telefoon houdt alleen zijn kernsysteem in het ROM-beeld. De applicaties, de bronnen en de bestanden die zeggen welke telefoon het is, staan in een tweede beeld, dat als RPKG-bestand naast de ROM wordt gedumpt. De core leest het waar het staat, als station Z, en pakt niets uit. Er is geen specifiek bestand vereist, omdat de dump van elk model verschilt, maar het moet de RPKG zijn die bij de meegegeven ROM hoort. Hij is nodig voor een N-Gage 2.0-spel, dat op zo'n telefoon draait. De Nokia 5320 XpressMusic is degene die is getest.",
+		"setting.clockstart": "Start van de klok (UTC)",
+		"setting.clockstart.about": "De datum en tijd die de klok van de telefoon toont wanneer de machine start, in UTC. Schrijf het als JJJJ-MM-DD UU:MM:SS of alleen JJJJ-MM-DD, van 1980 tot 2099. De klok hoort bij de geëmuleerde telefoon. Hij start hier bij elke run en loopt mee met de instructies die de telefoon uitvoert, nooit met de tijd van uw computer. Een spel dat zijn willekeurige getallen uit de tijd haalt, krijgt daardoor bij elke run dezelfde getallen. Een andere datum verandert wat zo'n spel doet, dus de datum hoort bij het apparaat en een film legt hem vast.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Hoe de OpenGL ES 1-graphics van de telefoon worden getekend. 'emulated' (de standaard van EKA2L1, die het 'GPU accelerated GLES1' noemt) vervangt de grafische bibliotheek van de telefoon door die van de emulator. Die tekent met de softwarematige OpenGL die in deze core is ingebouwd, binnen de sandbox, dus het resultaat is op elke computer hetzelfde. 'software' houdt de eigen tekencode van de telefoon, geschreven door Nokia en draaiend als elke andere telefooncode. Het is trager, en het is precies wat de telefoon draaide, dus het is de moeite waard om te proberen als de 3D van een spel er met 'emulated' verkeerd uitziet. Bij beide keuzes speelt een film identiek af, en hij legt vast met welke hij is gemaakt.",
+		"setting.screenbuffersync": "Synchronisatie schermbuffer",
+		"setting.screenbuffersync.about": "Of het beeld dat het vensterssysteem van de telefoon samenstelt ook wordt gekopieerd naar het schermgeheugen dat een applicatie kan lezen. 'preferred' is de eigen keuze van EKA2L1. Die staat aan voor een oudere telefoon (de N-Gage, Symbian 6 tot 8) en uit voor een nieuwere (Symbian 9 en later, inclusief N-Gage 2.0). Een spel dat zijn eigen scherm leest, om een schermafbeelding op te slaan of over het laatste beeld te tekenen, heeft het aan nodig en kan zonder een oud of kapot beeld tonen. Al het andere draait sneller met het uit. De kopie gaat naar het geheugen van de telefoon, dus de instelling hoort bij het apparaat en een film legt hem vast. Twee andere opties van EKA2L1 zijn er met opzet uit gelaten. 'CPU emulation' is hier altijd de interpreter, omdat de recompiler in deze core trager bleek. 'Real-time accuracy' werkt alleen op een timer die de klok van uw computer volgt, en die gebruikt deze core niet.",
+		"slot.game": "Spel",
+		"slot.game.help": "Een N-Gage-spel, in een van vier vormen. Een N-Gage 2.0-spel (.n-gage) wordt geïnstalleerd door de N-Gage-applicatie, en de wizard vraagt daarna om die applicatie en om de RPKG van de telefoon als firmware. Een kaartbeeld (.blz) wordt uitgepakt door de BLZ-installer, en de wizard vraagt daarna om die installer als firmware. Een kaartdump (een .rar, .zip of .7z met de map System\\Apps van de kaart) wordt gekopieerd naar de geheugenkaart van de machine. Een Symbian-pakket (.sis, .sisx) wordt op station C geïnstalleerd. In elk geval staat het geïnstalleerde spel in het eigen geheugen van de machine, dus het hoort bij elke savestate en elke film die van dit project is gemaakt."
+	}
+}

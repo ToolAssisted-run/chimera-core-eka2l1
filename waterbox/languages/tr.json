@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Makine bu .blz dosyasını açamadı: BLZ yükleyici yazılımı çalışmadı ya da hiçbir şey açmadı.",
+		"error.clock_start": "Saat başlangıcı ayarı '%1'. Bu, UTC cinsinden bir tarih ve saattir: YYYY-MM-DD HH:MM:SS (ya da YYYY-MM-DD), 1980 ile 2099 arası.",
+		"error.device_refused": "Aygıt reddedildi.",
+		"error.needs_rpkg": "Bu ROM, sürücü Z'yi ikinci bir görüntüde tutar ve telefonun RPKG'si projede değil.",
+		"error.ngage_not_installed": "Makine bu .n-gage dosyasını alamadı: N-Gage uygulama yazılımı kurulmadı ya da oyun bellek kartına konamadı.",
+		"error.rom_device_refused": "ROM'daki aygıt reddedildi.",
+		"error.rom_no_device": "ROM hangi aygıt olduğunu söylemiyor.",
+		"error.rpkg_empty": "RPKG bir RPKG değil ya da hiç dosya içermiyor.",
+		"error.rpkg_no_device": "RPKG hangi aygıt olduğunu söylemiyor.",
+		"error.rpkg_not_opened": "RPKG açılamadı.",
+		"error.rpkg_not_read": "RPKG okunamadı.",
+		"firmware.blzinstapp_sis": "BLZ yükleyici (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Bir N-Gage .blz kart görüntüsünü açan Symbian uygulaması. .blz, telefonun kendi başına okuyamadığı sıkıştırılmış bir dosyadır. Bu uygulama makineye kurulur ve oyunu bellek kartına açar; oyun oradan çalışır. Yalnızca bir .blz projesi için gerekir.",
+		"firmware.ngage_sis": "N-Gage 2.0 uygulaması (v1.40.1557)",
+		"firmware.ngage_sis.about": "N-Gage 2.0 uygulaması, onu kuran paket olarak (N-Gage INSTALLER v.1.40.1557). Telefon bir .n-gage dosyasını doğrudan çalıştıramaz. N-Gage uygulaması, oyunu ilk başlatıldığında E:\\n-gage\\ klasöründen kurar. Bu paket makineye kurulur ve başlatılır; oyun sonra Oyunlarım listesinde görünür ve sol yumuşak tuşta Oyunu Başlat yazar. Yalnızca bir .n-gage projesi için gerekir.",
+		"firmware.sym_rom": "Symbian aygıt ROM'u",
+		"firmware.sym_rom.about": "Telefonun ROM'unun bir dökümü. Bunun hangi aygıt olduğunu söyler (üretici, model, yazılım kodu ve Symbian sürümü) ve telefonun Z sürücüsünü tutar. Oyunla birlikte makinenin tamamıdır. Herhangi bir Symbian telefonunun dökümü kabul edilir. Belirli bir dosya gerekmez, çünkü her modelin dökümü ayrı bir dosyadır.",
+		"firmware.sym_rpkg": "Symbian aygıt RPKG'si (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Bir Symbian 9 telefonunun Z sürücüsünün geri kalanı. Böyle bir telefon ROM görüntüsünde yalnızca çekirdek sistemini tutar. Uygulamalar, kaynaklar ve telefonun hangi olduğunu söyleyen dosyalar ikinci bir görüntüdedir; bu, ROM'un yanında bir RPKG dosyası olarak dökülür. Çekirdek, onu olduğu yerde Z sürücüsü olarak okur ve hiçbir şeyi açmaz. Belirli bir dosya gerekmez, çünkü her modelin dökümü farklıdır; ama onunla verilen ROM'a ait RPKG olmalıdır. Bir N-Gage 2.0 oyunu için gerekir; bu oyun böyle bir telefonda çalışır. Denenen model Nokia 5320 XpressMusic'tir.",
+		"setting.clockstart": "Saat başlangıcı (UTC)",
+		"setting.clockstart.about": "Makine başladığında telefonun saatinin gösterdiği tarih ve saat, UTC olarak. YYYY-AA-GG SS:DD:SS biçiminde ya da yalnızca YYYY-AA-GG olarak, 1980 ile 2099 arasında yazın. Saat öykülenen telefona aittir. Her çalıştırmada burada başlar ve telefonun çalıştırdığı komutlarla ilerler; asla bilgisayarınızın saatiyle ilerlemez. Rastgele sayılarını zamandan alan bir oyun, bu yüzden her çalıştırmada aynı sayıları alır. Farklı bir tarih böyle bir oyunun yaptığını değiştirir; bu yüzden tarih makinenin bir parçasıdır ve bir film bunu kaydeder.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Telefonun OpenGL ES 1 grafiklerinin nasıl çizildiği. 'emulated' (EKA2L1'in varsayılanı; buna 'GPU accelerated GLES1' der), telefonun kendi grafik kütüphanesini öykünücünün kendisiyle değiştirir. Bu da çekirdeğin içine gömülü yazılım OpenGL'i ile, korumalı alanın içinde çizer; bu yüzden sonuç her bilgisayarda aynıdır. 'software' telefonun kendi çizim kodunu tutar; bunu Nokia yazmıştır ve diğer telefon kodu gibi çalıştırılır. Daha yavaştır ve telefonun tam olarak çalıştırdığı şeydir; bu yüzden 'emulated' ile bir oyunun 3B görüntüsü yanlış göründüğünde denemeye değer. İki seçenekle de bir film aynı biçimde oynatılır ve hangisiyle yapıldığını kaydeder.",
+		"setting.screenbuffersync": "Ekran tamponu senkronu",
+		"setting.screenbuffersync.about": "Telefonun pencere sisteminin birleştirdiği resmin, bir uygulamanın okuyabildiği ekran belleğine de kopyalanıp kopyalanmadığı. 'preferred' EKA2L1'in kendi seçimidir. Eski bir telefonda (N-Gage, Symbian 6 ila 8) açık, yeni bir telefonda (Symbian 9 ve sonrası, N-Gage 2.0 dahil) kapalıdır. Kendi ekranını okuyan bir oyun, bir ekran görüntüsü almak ya da son kareyi üzerine çizmek için bunun açık olmasını ister; kapalıyken eski ya da bozuk bir resim gösterebilir. Diğer her şey kapalıyken daha hızlı çalışır. Kopya telefonun belleğine gider; bu yüzden ayar makinenin bir parçasıdır ve bir film bunu kaydeder. Buraya bilerek alınmayan iki EKA2L1 seçeneği var. 'CPU emulation' burada her zaman yorumlayıcıdır, çünkü bu çekirdekte yeniden derleyicinin daha yavaş olduğu ölçülmüştür. 'Real-time accuracy' yalnızca bilgisayarınızın saatini izleyen bir zamanlayıcıyı etkiler; bu çekirdek onu kullanmaz.",
+		"slot.game": "Oyun",
+		"slot.game.help": "Bir N-Gage oyunu; dört biçimden birinde. Bir N-Gage 2.0 oyunu (.n-gage) N-Gage uygulaması tarafından kurulur ve sihirbaz sonra bu uygulamayı ve telefonun RPKG'sini yazılım olarak ister. Bir kart görüntüsü (.blz) BLZ yükleyici tarafından açılır ve sihirbaz sonra bu yükleyiciyi yazılım olarak ister. Bir kart dökümü (içinde kartın System\\Apps klasörleri bulunan bir .rar, .zip ya da .7z), makinenin bellek kartına kopyalanır. Bir Symbian paketi (.sis, .sisx), C sürücüsüne kurulur. Her durumda kurulu oyun makinenin kendi belleğindedir; bu yüzden bu projeden yapılan her durum kaydının ve her filmin parçasıdır."
+	}
+}

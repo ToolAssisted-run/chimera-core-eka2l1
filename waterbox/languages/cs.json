@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Stroj nemohl rozbalit tento .blz: firmware instalátoru BLZ neběžel nebo nic nerozbalil.",
+		"error.clock_start": "Nastavení Clock start je „%1“. Je to datum a čas v UTC ve tvaru RRRR-MM-DD HH:MM:SS (nebo RRRR-MM-DD), od roku 1980 do roku 2099.",
+		"error.device_refused": "Zařízení bylo odmítnuto.",
+		"error.needs_rpkg": "Tato ROM má jednotku Z v druhém obrazu a RPKG telefonu není v projektu.",
+		"error.ngage_not_installed": "Stroj nemohl převzít tento .n-gage: firmware aplikace N-Gage se nenainstaloval, nebo hru nešlo umístit na paměťovou kartu.",
+		"error.rom_device_refused": "Zařízení v ROM bylo odmítnuto.",
+		"error.rom_no_device": "ROM neříká, o které zařízení jde.",
+		"error.rpkg_empty": "RPKG není správný, nebo neobsahuje žádné soubory.",
+		"error.rpkg_no_device": "RPKG neříká, o které zařízení jde.",
+		"error.rpkg_not_opened": "RPKG nešlo otevřít.",
+		"error.rpkg_not_read": "RPKG nešlo přečíst.",
+		"firmware.blzinstapp_sis": "Instalátor BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Aplikace Symbian, která rozbaluje obraz karty N-Gage .blz. Soubor .blz je komprimovaný soubor, který telefon sám nepřečte. Tato aplikace se nainstaluje do stroje a rozbalí hru na paměťovou kartu a hra pak běží odtud. Potřebuje se jen u projektu .blz.",
+		"firmware.ngage_sis": "Aplikace N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "Aplikace N-Gage 2.0 jako balíček, který ji instaluje (N-Gage INSTALLER v.1.40.1557). Telefon nedokáže spustit soubor .n-gage přímo. Aplikace N-Gage takovou hru nainstaluje z E:\\n-gage\\ při prvním spuštění. Tento balíček se nainstaluje do stroje a spustí, a hra se pak objeví v seznamu Moje hry s tlačítkem Start Game na levém softklíči. Potřebuje se jen u projektu .n-gage.",
+		"firmware.sym_rom": "ROM zařízení Symbian",
+		"firmware.sym_rom.about": "Výpis ROM telefonu. Říká, které zařízení to je (výrobce, model, kód firmwaru a verze Symbianu) a obsahuje jednotku Z telefonu. Spolu s hrou je to celý stroj. Přijme se výpis z jakéhokoli telefonu Symbian. Žádný konkrétní soubor se nevyžaduje, protože výpis každého modelu je jiný soubor.",
+		"firmware.sym_rpkg": "RPKG zařízení Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Zbytek jednotky Z telefonu se Symbianem 9. Takový telefon drží v obrazu ROM jen své jádro systému. Aplikace, zdroje a soubory, které říkají, o který telefon jde, jsou v druhém obrazu, který se vypíše jako soubor RPKG vedle ROM. Jádro ho čte tam, kde je, jako jednotku Z, a nic nerozbaluje. Žádný konkrétní soubor se nevyžaduje, protože výpis každého modelu je jiný, ale musí to být RPKG, který patří k ROM zadané spolu s ním. Potřebuje se pro hru N-Gage 2.0, která běží na takovém telefonu. Otestovaný byl Nokia 5320 XpressMusic.",
+		"setting.clockstart": "Začátek hodin (UTC)",
+		"setting.clockstart.about": "Datum a čas, které hodiny telefonu ukazují při spuštění stroje, v UTC. Zapište je jako RRRR-MM-DD HH:MM:SS, nebo jen RRRR-MM-DD, od roku 1980 do 2099. Hodiny patří emulovanému telefonu. Zde začínají při každém běhu a postupují podle instrukcí, které telefon provede, nikdy podle času vašeho počítače. Hra, která si náhodná čísla bere z času, tedy dostane při každém běhu stejná čísla. Jiné datum změní, co taková hra dělá, proto je datum součástí stroje a záznam ho zaznamenává.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Jak se kreslí grafika OpenGL ES 1 telefonu. 'emulated' (výchozí volba EKA2L1, které to nazývá 'GPU accelerated GLES1') nahradí grafickou knihovnu telefonu knihovnou emulátoru. Ta kreslí softwarovým OpenGL vestavěným do tohoto jádra, uvnitř izolovaného prostředí, takže výsledek je na každém počítači stejný. 'software' ponechá kreslicí kód telefonu, který napsala Nokia a který běží jako jakýkoli jiný kód telefonu. Je pomalejší a je to přesně to, co telefon běžel, takže stojí za vyzkoušení, když 3D hry v režimu 'emulated' vypadá špatně. Při obou volbách se záznam přehraje stejně a zaznamenává, s kterou byl pořízen.",
+		"setting.screenbuffersync": "Synchronizace bufferu obrazovky",
+		"setting.screenbuffersync.about": "Zda se obraz, který skládá okenní systém telefonu, také zkopíruje do paměti obrazovky, kterou může číst aplikace. 'preferred' je vlastní volba EKA2L1. Je zapnuto u starších telefonů (N-Gage, Symbian 6 až 8) a vypnuto u novějších (Symbian 9 a novější, včetně N-Gage 2.0). Hra, která čte vlastní obrazovku, aby uložila snímek obrazovky nebo kreslila přes poslední snímek, ho potřebuje zapnutý a bez něj může ukázat starý nebo rozbitý obraz. Vše ostatní běží při vypnutí rychleji. Kopie jde do paměti telefonu, takže nastavení je součástí stroje a záznam ho zaznamenává. Dvě další volby EKA2L1 jsou záměrně vynechány. 'CPU emulation' je tu vždy interpret, protože se naměřilo, že rekompilátor je v tomto jádru pomalejší. 'Real-time accuracy' ovlivňuje jen časovač, který se řídí hodinami vašeho počítače, a to toto jádro nepoužívá.",
+		"slot.game": "Hra",
+		"slot.game.help": "Hra N-Gage, v jedné ze čtyř podob. Hra N-Gage 2.0 (.n-gage) se nainstaluje aplikací N-Gage, a průvodce pak jako firmware žádá tuto aplikaci a RPKG telefonu. Obraz karty (.blz) rozbalí instalátor BLZ a průvodce pak jako firmware žádá tento instalátor. Výpis karty (.rar, .zip nebo .7z, který obsahuje složky System\\Apps karty) se zkopíruje na paměťovou kartu stroje. Balíček Symbian (.sis, .sisx) se nainstaluje na jednotku C. Ve všech případech je nainstalovaná hra ve vlastní paměti stroje, takže je součástí každého uloženého stavu i každého záznamu pořízeného z tohoto projektu."
+	}
+}

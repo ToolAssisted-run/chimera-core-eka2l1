@@ -33,6 +33,11 @@
 #include <waterbox_slots.h>
 #include <waterboxcore.h>
 
+/* A text a person reads is a key of languages/en.json, each of its
+ * arguments after a TEXT_ARG (chimera docs/translations.md). TEXT_ARG is a
+ * string of its own so the byte after it is never read as more of its hex. */
+#define TEXT_ARG "\x1f"
+
 namespace {
     // The N-Gage's screen. Nothing draws to it yet; it is here so a host that
     // asks for a picture gets a well-formed one rather than nothing.
@@ -176,8 +181,7 @@ ECL_EXPORT int Init(void) {
     if (wbx_setting_str("clockStart", value, sizeof value) > 0) {
         std::uint64_t seconds = 0;
         if (!parse_clock_start(value, seconds)) {
-            std::snprintf(g_loadError, sizeof g_loadError,
-                "the Clock start setting is '%s'; it is a date and time in UTC, YYYY-MM-DD HH:MM:SS (or YYYY-MM-DD), from 1980 to 2099", value);
+            std::snprintf(g_loadError, sizeof g_loadError, "error.clock_start" TEXT_ARG "%s", value);
             return 0;
         }
         options.epoch_us = seconds * 1000000ull;
@@ -242,7 +246,7 @@ ECL_EXPORT int Init(void) {
         g_drives->mount_empty(drive_e, drive_media::physical, io_attrib_removeable);
 
         if (!g_machine->set_device(0)) {
-            std::snprintf(g_loadError, sizeof g_loadError, "the device in the ROM was refused");
+            std::snprintf(g_loadError, sizeof g_loadError, "error.rom_device_refused");
             return 0;
         }
 
@@ -288,8 +292,7 @@ ECL_EXPORT int Init(void) {
 
                 if (ngage == 0) {
                     std::snprintf(g_loadError, sizeof g_loadError,
-                        "the machine could not take this .n-gage - the N-Gage application firmware "
-                        "did not install, or the game could not be put on the memory card");
+                        "error.ngage_not_installed");
                     return 0;
                 }
 
@@ -298,8 +301,7 @@ ECL_EXPORT int Init(void) {
             } else if (ends_with(game, ".blz")) {
                 if (!g_machine->install_blz(game, BLZ_INSTALLER)) {
                     std::snprintf(g_loadError, sizeof g_loadError,
-                        "the machine could not unpack this .blz - the BLZ installer firmware "
-                        "did not run, or unpacked nothing");
+                        "error.blz_not_unpacked");
                     return 0;
                 }
 

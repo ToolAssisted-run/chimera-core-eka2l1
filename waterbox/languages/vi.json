@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "Máy không giải nén được tệp .blz này: firmware trình cài BLZ không chạy, hoặc không giải nén được gì.",
+		"error.clock_start": "Cài đặt Clock start là '%1'. Đây là ngày và giờ theo UTC, dạng YYYY-MM-DD HH:MM:SS (hoặc YYYY-MM-DD), từ năm 1980 đến năm 2099.",
+		"error.device_refused": "Thiết bị đã bị từ chối.",
+		"error.needs_rpkg": "ROM này giữ ổ Z trong một ảnh thứ hai, và RPKG của điện thoại không có trong project.",
+		"error.ngage_not_installed": "Máy không nhận được tệp .n-gage này: firmware ứng dụng N-Gage không cài được, hoặc trò chơi không đặt được vào thẻ nhớ.",
+		"error.rom_device_refused": "Thiết bị trong ROM đã bị từ chối.",
+		"error.rom_no_device": "ROM không cho biết nó là thiết bị nào.",
+		"error.rpkg_empty": "RPKG không phải là một RPKG hợp lệ, hoặc không chứa tệp nào.",
+		"error.rpkg_no_device": "RPKG không cho biết nó là thiết bị nào.",
+		"error.rpkg_not_opened": "Không mở được RPKG.",
+		"error.rpkg_not_read": "Không đọc được RPKG.",
+		"firmware.blzinstapp_sis": "Trình cài BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "Ứng dụng Symbian giải nén một ảnh thẻ .blz của N-Gage. Một .blz là một tệp nén mà điện thoại không tự đọc được. Ứng dụng này được cài vào máy và giải nén trò chơi lên thẻ nhớ, rồi trò chơi chạy từ đó. Nó chỉ cần cho một project .blz.",
+		"firmware.ngage_sis": "Ứng dụng N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "Ứng dụng N-Gage 2.0, dưới dạng gói cài đặt nó (N-Gage INSTALLER v.1.40.1557). Điện thoại không chạy trực tiếp được tệp .n-gage. Ứng dụng N-Gage cài một trò chơi như vậy từ E:\\n-gage\\ lần đầu nó được khởi động. Gói này được cài vào máy và khởi động, và khi đó trò chơi xuất hiện trong danh sách Trò chơi của tôi, với Start Game ở phím mềm bên trái. Nó chỉ cần cho một project .n-gage.",
+		"firmware.sym_rom": "ROM thiết bị Symbian",
+		"firmware.sym_rom.about": "Bản chép ROM của điện thoại. Nó cho biết đây là thiết bị nào (hãng, đời máy, mã firmware và phiên bản Symbian) và nó giữ ổ Z của điện thoại. Cùng với trò chơi, nó là toàn bộ máy. Bản chép từ bất kỳ điện thoại Symbian nào đều được chấp nhận. Không tệp cụ thể nào được yêu cầu, vì bản chép của mỗi đời máy là một tệp khác.",
+		"firmware.sym_rpkg": "RPKG thiết bị Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "Phần còn lại của ổ Z của điện thoại Symbian 9. Một điện thoại như vậy chỉ giữ hệ thống lõi trong ảnh ROM. Các ứng dụng, tài nguyên và các tệp cho biết nó là điện thoại nào nằm trong một ảnh thứ hai, được chép ra thành tệp RPKG cạnh ROM. Lõi đọc nó tại chỗ, như ổ Z, và không giải nén gì. Không tệp cụ thể nào được yêu cầu, vì bản chép của mỗi đời máy khác nhau, nhưng nó phải là RPKG thuộc về ROM được đưa cùng. Nó cần cho một trò chơi N-Gage 2.0, vốn chạy trên điện thoại như vậy. Nokia 5320 XpressMusic là máy đã được thử nghiệm.",
+		"setting.clockstart": "Giờ bắt đầu đồng hồ (UTC)",
+		"setting.clockstart.about": "Ngày và giờ mà đồng hồ điện thoại hiển thị khi máy khởi động, theo UTC. Viết dạng YYYY-MM-DD HH:MM:SS hoặc chỉ YYYY-MM-DD, từ 1980 đến 2099. Đồng hồ thuộc về điện thoại được giả lập. Nó bắt đầu ở đây trong mỗi lần chạy và tiến theo các lệnh mà điện thoại thực thi, không bao giờ theo giờ của máy tính bạn. Một trò chơi lấy số ngẫu nhiên từ thời gian vì vậy sẽ nhận được cùng số trong mỗi lần chạy. Một ngày khác làm thay đổi việc trò chơi đó làm, nên ngày là một phần của máy và movie ghi lại nó.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Cách đồ họa OpenGL ES 1 của điện thoại được vẽ. 'emulated' (mặc định của EKA2L1, mà nó gọi là 'GLES1 tăng tốc GPU') thay thế thư viện đồ họa của điện thoại bằng của trình giả lập. Thư viện đó vẽ bằng OpenGL phần mềm có sẵn trong lõi này, bên trong sandbox, nên kết quả giống nhau trên mọi máy tính. 'software' giữ mã vẽ của chính điện thoại, do Nokia viết và chạy như mọi mã khác của điện thoại. Nó chậm hơn, và nó chính xác là những gì điện thoại đã chạy, nên đáng thử khi 3D của một trò chơi trông sai với 'emulated'. Với lựa chọn nào thì movie cũng phát lại giống hệt, và nó ghi lại lựa chọn đã được dùng để tạo.",
+		"setting.screenbuffersync": "Đồng bộ bộ đệm màn hình",
+		"setting.screenbuffersync.about": "Hình mà hệ thống cửa sổ của điện thoại ghép lại có được chép thêm vào bộ nhớ màn hình mà một ứng dụng có thể đọc hay không. 'preferred' là lựa chọn riêng của EKA2L1. Nó bật cho điện thoại đời cũ (N-Gage, Symbian 6 đến 8) và tắt cho đời mới hơn (Symbian 9 trở lên, kể cả N-Gage 2.0). Một trò chơi đọc chính màn hình của nó, để lưu ảnh chụp hoặc vẽ đè lên khung trước, cần nó bật và có thể hiện hình cũ hoặc hỏng nếu tắt. Mọi thứ khác chạy nhanh hơn khi tắt. Việc chép đi vào bộ nhớ của điện thoại, nên cài đặt là một phần của máy và movie ghi lại nó. Hai tùy chọn khác của EKA2L1 được bỏ có chủ ý. 'CPU emulation' ở đây luôn là trình thông dịch, vì trình biên dịch lại đã được đo là chậm hơn trong lõi này. 'Real-time accuracy' chỉ ảnh hưởng một bộ hẹn giờ theo đồng hồ máy tính của bạn, mà lõi này không dùng.",
+		"slot.game": "Trò chơi",
+		"slot.game.help": "Một trò chơi N-Gage, dưới một trong bốn dạng. Một trò chơi N-Gage 2.0 (.n-gage) được cài bởi ứng dụng N-Gage, và trình hướng dẫn sau đó yêu cầu ứng dụng đó và RPKG của điện thoại làm firmware. Một ảnh thẻ (.blz) được giải nén bởi trình cài BLZ, và trình hướng dẫn sau đó yêu cầu trình cài đó làm firmware. Một bản chép thẻ (.rar, .zip hoặc .7z chứa các thư mục System\\Apps của thẻ) được chép vào thẻ nhớ của máy. Một gói Symbian (.sis, .sisx) được cài vào ổ C. Trong mọi trường hợp, trò chơi đã cài nằm trong bộ nhớ riêng của máy, nên nó là một phần của mọi trạng thái đã lưu và mọi movie được tạo từ project này."
+	}
+}

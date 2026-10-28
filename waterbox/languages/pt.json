@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "A máquina não conseguiu descompactar este .blz: o firmware do instalador BLZ não rodou, ou não descompactou nada.",
+		"error.clock_start": "A configuração Clock start é '%1'. É uma data e hora em UTC, AAAA-MM-DD HH:MM:SS (ou AAAA-MM-DD), de 1980 a 2099.",
+		"error.device_refused": "O dispositivo foi recusado.",
+		"error.needs_rpkg": "Esta ROM guarda a unidade Z em uma segunda imagem, e o RPKG do celular não está no projeto.",
+		"error.ngage_not_installed": "A máquina não conseguiu receber este .n-gage: o firmware do aplicativo N-Gage não foi instalado, ou o jogo não pôde ser colocado no cartão de memória.",
+		"error.rom_device_refused": "O dispositivo que está na ROM foi recusado.",
+		"error.rom_no_device": "A ROM não diz qual é o dispositivo.",
+		"error.rpkg_empty": "O RPKG não é válido, ou não tem arquivos.",
+		"error.rpkg_no_device": "O RPKG não diz qual é o dispositivo.",
+		"error.rpkg_not_opened": "Não foi possível abrir o RPKG.",
+		"error.rpkg_not_read": "Não foi possível ler o RPKG.",
+		"firmware.blzinstapp_sis": "Instalador BLZ (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "O aplicativo Symbian que descompacta uma imagem de cartão .blz do N-Gage. Um .blz é um arquivo compactado que o celular não consegue ler sozinho. Este aplicativo é instalado na máquina e descompacta o jogo no cartão de memória, e o jogo roda a partir dele. Só é necessário para um projeto .blz.",
+		"firmware.ngage_sis": "Aplicativo N-Gage 2.0 (v1.40.1557)",
+		"firmware.ngage_sis.about": "O aplicativo N-Gage 2.0, como o pacote que o instala (N-Gage INSTALLER v.1.40.1557). O celular não consegue executar um arquivo .n-gage diretamente. O aplicativo N-Gage instala esse jogo a partir de E:\\n-gage\\ na primeira vez em que é iniciado. Este pacote é instalado na máquina e iniciado, e o jogo aparece então na sua lista Meus Jogos, com Iniciar Jogo na tecla de função esquerda. Só é necessário para um projeto .n-gage.",
+		"firmware.sym_rom": "ROM do dispositivo Symbian",
+		"firmware.sym_rom.about": "Um despejo da ROM do celular. Ele diz qual é o dispositivo (fabricante, modelo, código de firmware e versão do Symbian) e guarda a unidade Z do celular. Junto com o jogo, forma a máquina inteira. Aceita um despejo de qualquer celular Symbian. Nenhum arquivo específico é exigido, porque o despejo de cada modelo é um arquivo diferente.",
+		"firmware.sym_rpkg": "RPKG do dispositivo Symbian (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "O resto da unidade Z de um celular Symbian 9. Esse celular guarda na imagem da ROM só o seu sistema central. Os aplicativos, os recursos e os arquivos que dizem qual é o celular ficam numa segunda imagem, que é despejada como um arquivo RPKG ao lado da ROM. O núcleo a lê onde ela está, como unidade Z, e não descompacta nada. Nenhum arquivo específico é exigido, porque o despejo de cada modelo é diferente, mas ele precisa ser o RPKG que pertence à ROM informada junto. É necessário para um jogo N-Gage 2.0, que roda num celular desse tipo. O Nokia 5320 XpressMusic foi o modelo testado.",
+		"setting.clockstart": "Início do relógio (UTC)",
+		"setting.clockstart.about": "A data e a hora que o relógio do celular mostra quando a máquina começa, em UTC. Escreva como AAAA-MM-DD HH:MM:SS ou só AAAA-MM-DD, de 1980 a 2099. O relógio pertence ao celular emulado. Ele começa aqui em cada execução e avança com as instruções que o celular executa, nunca com a hora do seu computador. Um jogo que tira seus números aleatórios do tempo, portanto, recebe os mesmos números em cada execução. Uma data diferente muda o que um jogo assim faz, então a data faz parte da máquina, e um filme a registra.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "Como os gráficos OpenGL ES 1 do celular são desenhados. 'emulated' (o padrão do EKA2L1, que ele chama de 'GLES1 acelerado por GPU') troca a biblioteca gráfica do próprio celular pela do emulador. Essa desenha com o OpenGL por software embutido neste núcleo, dentro do sandbox, então o resultado é o mesmo em qualquer computador. 'software' mantém o código de desenho do próprio celular, escrito pela Nokia e executado como qualquer outro código do celular. É mais lento, e é exatamente o que o celular executava, então vale tentar quando o 3D de um jogo parece errado com 'emulated'. Com qualquer uma das escolhas, um filme toca de forma idêntica, e registra com qual foi feito.",
+		"setting.screenbuffersync": "Sincronia do buffer de tela",
+		"setting.screenbuffersync.about": "Se a imagem que o sistema de janelas do celular monta também é copiada para a memória de tela que um aplicativo pode ler. 'preferred' é a escolha do próprio EKA2L1. Fica ligada para um celular mais antigo (o N-Gage, Symbian 6 a 8) e desligada para um mais novo (Symbian 9 e posteriores, incluindo o N-Gage 2.0). Um jogo que lê a própria tela, para salvar uma captura de tela ou para desenhar sobre o último quadro, precisa dela ligada e pode mostrar uma imagem antiga ou quebrada sem ela. Todo o resto roda mais rápido com ela desligada. A cópia vai para a memória do celular, então a opção faz parte da máquina, e um filme a registra. Duas outras opções do EKA2L1 foram deixadas de fora de propósito. 'CPU emulation' é sempre o interpretador aqui, porque o recompilador foi medido como mais lento neste núcleo. 'Real-time accuracy' só afeta um temporizador que segue o relógio do seu computador, o que este núcleo não usa.",
+		"slot.game": "Jogo",
+		"slot.game.help": "Um jogo de N-Gage, em uma de quatro formas. Um jogo N-Gage 2.0 (.n-gage) é instalado pelo aplicativo N-Gage, e o assistente então pede esse aplicativo e o RPKG do celular como firmware. Uma imagem de cartão (.blz) é descompactada pelo instalador BLZ, e o assistente então pede esse instalador como firmware. Um despejo de cartão (um .rar, .zip ou .7z que traz as pastas System\\Apps do cartão) é copiado para o cartão de memória da máquina. Um pacote Symbian (.sis, .sisx) é instalado na unidade C. Em todos os casos, o jogo instalado fica na própria memória da máquina, então faz parte de todo estado salvo e de todo filme feito deste projeto."
+	}
+}

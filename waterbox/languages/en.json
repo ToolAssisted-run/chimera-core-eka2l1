@@ -1,0 +1,31 @@
+{
+	"texts": {
+		"error.blz_not_unpacked": "The machine could not unpack this .blz: the BLZ installer firmware did not run, or unpacked nothing.",
+		"error.clock_start": "The Clock start setting is '%1'. It is a date and time in UTC, YYYY-MM-DD HH:MM:SS (or YYYY-MM-DD), from 1980 to 2099.",
+		"error.device_refused": "The device was refused.",
+		"error.needs_rpkg": "This ROM keeps drive Z in a second image, and the phone's RPKG is not in the project.",
+		"error.ngage_not_installed": "The machine could not take this .n-gage: the N-Gage application firmware did not install, or the game could not be put on the memory card.",
+		"error.rom_device_refused": "The device in the ROM was refused.",
+		"error.rom_no_device": "The ROM does not say which device it is.",
+		"error.rpkg_empty": "The RPKG is not one, or holds no files.",
+		"error.rpkg_no_device": "The RPKG does not say which device it is.",
+		"error.rpkg_not_opened": "The RPKG could not be opened.",
+		"error.rpkg_not_read": "The RPKG could not be read.",
+		"firmware.blzinstapp_sis": "BLZ installer (BLZinstapp.sis)",
+		"firmware.blzinstapp_sis.about": "The Symbian application that unpacks an N-Gage .blz card image. A .blz is a compressed file the phone cannot read by itself. This application is installed in the machine and unpacks the game onto the memory card, and the game runs from there. It is needed only for a .blz project.",
+		"firmware.ngage_sis": "N-Gage 2.0 application (v1.40.1557)",
+		"firmware.ngage_sis.about": "The N-Gage 2.0 application, as the package that installs it (N-Gage INSTALLER v.1.40.1557). The phone cannot run an .n-gage file directly. The N-Gage application installs such a game from E:\\n-gage\\ the first time it is started. This package is installed in the machine and started, and the game then appears in its My Games list, with Start Game on the left soft key. It is needed only for a .n-gage project.",
+		"firmware.sym_rom": "Symbian device ROM",
+		"firmware.sym_rom.about": "A dump of the phone's ROM. It says which device this is (maker, model, firmware code and Symbian version) and it holds the phone's drive Z. Together with the game it is the whole machine. A dump from any Symbian phone is accepted. No particular file is required, because every model's dump is a different file.",
+		"firmware.sym_rpkg": "Symbian device RPKG (SYM.RPKG)",
+		"firmware.sym_rpkg.about": "The rest of drive Z of a Symbian 9 phone. Such a phone keeps only its core system in the ROM image. The applications, the resources and the files that say which phone it is are in a second image, which is dumped as an RPKG file next to the ROM. The core reads it where it is, as drive Z, and unpacks nothing. No particular file is required, because every model's dump is different, but it has to be the RPKG that belongs to the ROM given with it. It is needed for an N-Gage 2.0 game, which runs on such a phone. The Nokia 5320 XpressMusic is the one that was tested.",
+		"setting.clockstart": "Clock start (UTC)",
+		"setting.clockstart.about": "The date and time the phone's clock shows when the machine starts, in UTC. Write it as YYYY-MM-DD HH:MM:SS or just YYYY-MM-DD, from 1980 to 2099. The clock belongs to the emulated phone. It starts here on every run and advances with the instructions the phone executes, never with your computer's time. A game that picks its random numbers from the time therefore gets the same numbers on every run. A different date changes what such a game does, so the date is part of the machine and a movie records it.",
+		"setting.opengles": "OpenGL ES 1",
+		"setting.opengles.about": "How the phone's OpenGL ES 1 graphics are drawn. 'emulated' (EKA2L1's default, which it calls 'GPU accelerated GLES1') replaces the phone's own graphics library with the emulator's. That one draws with the software OpenGL built into this core, inside the sandbox, so the result is the same on every computer. 'software' keeps the phone's own drawing code, written by Nokia and run like any other phone code. It is slower, and it is exactly what the phone ran, so it is worth trying when a game's 3D looks wrong with 'emulated'. With either choice a movie plays back identically, and it records which one it was made with.",
+		"setting.screenbuffersync": "Screen buffer sync",
+		"setting.screenbuffersync.about": "Whether the picture the phone's window system puts together is also copied into the screen memory that an application can read. 'preferred' is EKA2L1's own choice. It is on for an older phone (the N-Gage, Symbian 6 to 8) and off for a newer one (Symbian 9 and later, including N-Gage 2.0). A game that reads its own screen, to save a screenshot or to draw over the last frame, needs it on and may show an old or broken picture without it. Everything else runs faster with it off. The copy goes into the phone's memory, so the setting is part of the machine and a movie records it. Two other EKA2L1 options are left out on purpose. 'CPU emulation' is always the interpreter here, because the recompiler was measured to be slower in this core. 'Real-time accuracy' only affects a timer that follows your computer's clock, which this core does not use.",
+		"slot.game": "Game",
+		"slot.game.help": "An N-Gage game, in one of four forms. An N-Gage 2.0 game (.n-gage) is installed by the N-Gage application, and the wizard then asks for that application and for the phone's RPKG as firmware. A card image (.blz) is unpacked by the BLZ installer, and the wizard then asks for that installer as firmware. A card dump (a .rar, .zip or .7z that holds the card's System\\Apps folders) is copied onto the machine's memory card. A Symbian package (.sis, .sisx) is installed onto drive C. In every case the installed game is in the machine's own memory, so it is part of every savestate and every movie made from this project."
+	}
+}
