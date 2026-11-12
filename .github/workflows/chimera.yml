@@ -79,7 +79,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            meson ninja-build build-essential cmake pkg-config python3 \
+            meson ninja-build build-essential gcc-13 g++-13 cmake pkg-config python3 \
             libgl1-mesa-dev libegl-dev libx11-dev libxext-dev libasound2-dev \
             libsdl2-dev libwayland-dev \
             python3-mako bison flex
@@ -111,15 +111,21 @@ jobs:
           path: |
             chimera-checkout/extern/chimera-common-minibox/build/meson-linux
             chimera-checkout/extern/chimera-common-minibox/build/meson-cpp
-          key: guest-cpp-meson${{ steps.meson.outputs.version }}-${{ runner.os }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/.git') }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/meson.build') }}
+          key: guest-cpp-gcc13-meson${{ steps.meson.outputs.version }}-${{ runner.os }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/.git') }}-${{ hashFiles('chimera-checkout/extern/chimera-common-minibox/meson.build') }}
 
       - name: Build miniBox (host + C++ guest toolchain)
         run: |
           mb="$PWD/chimera-checkout/extern/chimera-common-minibox"
           [ -f "$mb/build/meson-linux/build.ninja" ] || meson setup "$mb/build/meson-linux" "$mb"
           meson compile -C "$mb/build/meson-linux"
-          [ -f "$mb/build/meson-cpp/build.ninja" ] || meson setup "$mb/build/meson-cpp" "$mb" -Dguest_cpp=true
-          meson compile -C "$mb/build/meson-cpp"
+          # The guest is compiled with GCC 13 (waterbox/guest-toolchain.cmake), and
+          # miniBox builds the guest's libstdc++ with whichever gcc is first on
+          # PATH. On Ubuntu 26.04 that is GCC 15, whose headers GCC 13 cannot
+          # read, so GCC 13 builds it here too.
+          gcc13="$RUNNER_TEMP/gcc-13"
+          mkdir -p "$gcc13" && ln -sf "$(command -v gcc-13)" "$gcc13/gcc" && ln -sf "$(command -v g++-13)" "$gcc13/g++"
+          [ -f "$mb/build/meson-cpp/build.ninja" ] || PATH="$gcc13:$PATH" meson setup "$mb/build/meson-cpp" "$mb" -Dguest_cpp=true
+          PATH="$gcc13:$PATH" meson compile -C "$mb/build/meson-cpp"
 
       - name: Build the native reference, the upstream suite and the cpu difftest
         run: |
